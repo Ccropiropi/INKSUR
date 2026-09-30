@@ -19,12 +19,21 @@ data class ArtifactDefinition(
     val armorModifier: Float = 0f,
     val attackSpeedModifier: Float = 0f,
     val pickupRadiusModifier: Float = 0f,
-    var isMasteryCured: Boolean = false
+    val maxHpMultiplier: Float = 0f,
+    val poisonDamageMultiplier: Float = 0f,
+    val projectileBounces: Int = 0,
+    val bounceDamageDelta: Float = 0f,
+    var isMasteryCured: Boolean = false,
+    var hasVampirism: Boolean = false
 ) {
     companion object {
         const val ARCHETYPE_HEAVY_WEIGHT = "Heavy Weight"
+        const val ARCHETYPE_CORRUPTED_MEDIUM = "Corrupted Medium"
+        const val ARCHETYPE_SACRED_GEOMETRY = "Sacred Geometry"
 
-        // Implementation Test - The Iron Vats (Cursed): +300% Ink Damage, -60% Movement Speed. Archetype: Heavy Weight
+        // ==========================================
+        // ARCHETYPE 1: HEAVY WEIGHT (Kinetic / Mass)
+        // ==========================================
         val TheIronVats = ArtifactDefinition(
             id = "iron_vats",
             name = "The Iron Vats",
@@ -35,7 +44,6 @@ data class ArtifactDefinition(
             moveSpeedModifier = -0.60f
         )
 
-        // Other Heavy Weight Archetype Artifacts for Broken Stone & Obelisk
         val LeadNib = ArtifactDefinition(
             id = "lead_nib",
             name = "Lead Nib",
@@ -67,7 +75,113 @@ data class ArtifactDefinition(
             moveSpeedModifier = -0.15f
         )
 
-        // General Cursed & Master Artifacts for Obelisk
+        // ==========================================
+        // ARCHETYPE 2: CORRUPTED MEDIUM (Status / DoT)
+        // ==========================================
+        val ToxicPigment = ArtifactDefinition(
+            id = "toxic_pigment",
+            name = "Toxic Pigment",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = ARCHETYPE_CORRUPTED_MEDIUM,
+            description = "+200% Poison/Bleed Damage, -50% Max HP.",
+            poisonDamageMultiplier = 2.0f,
+            maxHpMultiplier = -0.50f
+        )
+
+        val SpoiledInk = ArtifactDefinition(
+            id = "spoiled_ink",
+            name = "Spoiled Ink",
+            tier = ArtifactTier.BASIC,
+            archetypeTag = ARCHETYPE_CORRUPTED_MEDIUM,
+            description = "+25% Poison/Bleed Damage, +10% Ink Damage.",
+            damageModifier = 0.10f,
+            poisonDamageMultiplier = 0.25f
+        )
+
+        val FungalPaper = ArtifactDefinition(
+            id = "fungal_paper",
+            name = "Fungal Paper",
+            tier = ArtifactTier.RARE,
+            archetypeTag = ARCHETYPE_CORRUPTED_MEDIUM,
+            description = "+35% Status DoT Damage, +3 Armor.",
+            armorModifier = 3f,
+            poisonDamageMultiplier = 0.35f
+        )
+
+        val BlightedQuill = ArtifactDefinition(
+            id = "blighted_quill",
+            name = "Blighted Quill",
+            tier = ArtifactTier.RARE,
+            archetypeTag = ARCHETYPE_CORRUPTED_MEDIUM,
+            description = "+30% Poison/Bleed Damage, +20% Attack Speed.",
+            attackSpeedModifier = 0.20f,
+            poisonDamageMultiplier = 0.30f
+        )
+
+        val MoldyParchment = ArtifactDefinition(
+            id = "moldy_parchment",
+            name = "Moldy Parchment",
+            tier = ArtifactTier.LEGENDARY,
+            archetypeTag = ARCHETYPE_CORRUPTED_MEDIUM,
+            description = "+50% Poison/Bleed Damage, +25% Ink Damage.",
+            damageModifier = 0.25f,
+            poisonDamageMultiplier = 0.50f
+        )
+
+        // ==========================================
+        // ARCHETYPE 3: SACRED GEOMETRY (Projectiles)
+        // ==========================================
+        val TheFracturedRuler = ArtifactDefinition(
+            id = "fractured_ruler",
+            name = "The Fractured Ruler",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = ARCHETYPE_SACRED_GEOMETRY,
+            description = "Projectiles bounce 5 additional times, but lose 30% damage per bounce.",
+            projectileBounces = 5,
+            bounceDamageDelta = -0.30f
+        )
+
+        val BrassCompass = ArtifactDefinition(
+            id = "brass_compass",
+            name = "Brass Compass",
+            tier = ArtifactTier.BASIC,
+            archetypeTag = ARCHETYPE_SACRED_GEOMETRY,
+            description = "+30 Magnet Radius, +10% Attack Speed.",
+            pickupRadiusModifier = 30f,
+            attackSpeedModifier = 0.10f
+        )
+
+        val GraphPaper = ArtifactDefinition(
+            id = "graph_paper",
+            name = "Graph Paper",
+            tier = ArtifactTier.RARE,
+            archetypeTag = ARCHETYPE_SACRED_GEOMETRY,
+            description = "+20% Projectile Damage, +2 Armor.",
+            damageModifier = 0.20f,
+            armorModifier = 2f
+        )
+
+        val ProtractorPlate = ArtifactDefinition(
+            id = "protractor_plate",
+            name = "Protractor Plate",
+            tier = ArtifactTier.RARE,
+            archetypeTag = ARCHETYPE_SACRED_GEOMETRY,
+            description = "+25% Attack Speed, +10% Move Speed.",
+            attackSpeedModifier = 0.25f,
+            moveSpeedModifier = 0.10f
+        )
+
+        val GoldenSpiral = ArtifactDefinition(
+            id = "golden_spiral",
+            name = "Golden Spiral",
+            tier = ArtifactTier.LEGENDARY,
+            archetypeTag = ARCHETYPE_SACRED_GEOMETRY,
+            description = "+40% Ink Damage, +15% Move Speed.",
+            damageModifier = 0.40f,
+            moveSpeedModifier = 0.15f
+        )
+
+        // General Cursed & Master Artifacts
         val BleachParasite = ArtifactDefinition(
             id = "bleach_parasite",
             name = "Bleach Parasite",
@@ -87,7 +201,6 @@ data class ArtifactDefinition(
             pickupRadiusModifier = 50f
         )
 
-        // Lower-tier artifacts for Broken Stone shop
         val QuickSilverInk = ArtifactDefinition(
             id = "quicksilver_ink",
             name = "Quicksilver Ink",
@@ -106,7 +219,129 @@ data class ArtifactDefinition(
             attackSpeedModifier = 0.20f
         )
 
-        val StoneList = listOf(LeadNib, AnvilSeal, ColossusParchment, QuickSilverInk, FeatherWeightSeal)
-        val ObeliskList = listOf(TheIronVats, BleachParasite, SootCrown, ColossusParchment)
+        val StoneList = listOf(
+            LeadNib, AnvilSeal, ColossusParchment, QuickSilverInk, FeatherWeightSeal,
+            SpoiledInk, FungalPaper, BlightedQuill, MoldyParchment,
+            BrassCompass, GraphPaper, ProtractorPlate, GoldenSpiral
+        )
+
+        val ObeliskList = listOf(
+            TheIronVats, ToxicPigment, TheFracturedRuler,
+            BleachParasite, SootCrown, ColossusParchment
+        )
+
+        // ══════════════════════════════════════════════════════════════════════
+        // PHASE 7: RULE-BREAKING CURSED ARTIFACTS (Behavioral Shifts)
+        // ══════════════════════════════════════════════════════════════════════
+
+        /** The player can no longer stand still. Forces max-magnitude movement at
+         *  all times. The player leaves a permanent, highly-damaging ink trail
+         *  wherever they walk. Gameplay becomes Snake. */
+        val TheLeakyPen = ArtifactDefinition(
+            id = "the_leaky_pen",
+            name = "The Leaky Pen",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = "Rule-Breaker",
+            description = "You cannot stand still. Your movement permanently paints a damaging ink trail that harms enemies and yourself if crossed again.",
+            moveSpeedModifier = 0.20f,   // slight speed bonus to make forced movement viable
+            damageModifier = 0.50f       // trail damage bonus
+        )
+
+        /** All equipped spells stop firing on individual cooldowns. Instead, ALL
+         *  spells fire simultaneously every 4 seconds in one synchronized burst. */
+        val TheBrokenMetronome = ArtifactDefinition(
+            id = "the_broken_metronome",
+            name = "The Broken Metronome",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = "Rule-Breaker",
+            description = "All spells stop auto-casting. Instead, every 4 seconds ALL spells fire simultaneously in one massive synchronized burst.",
+            attackSpeedModifier = 0f    // cooldown system replaced; handled specially in GameViewModel
+        )
+
+        // ══════════════════════════════════════════════════════════════════════
+        // PHASE 8: CMYK PIGMENT CARTRIDGES (Elemental Alchemy)
+        // Dropped by specific Elite enemies; socket onto spells via new UI.
+        // ══════════════════════════════════════════════════════════════════════
+
+        /** Cyan Cartridge — Chill/Slow pigment.
+         *  Converts spell damage type to Cyan. Hit enemies gain cyanTimer → -35% speed.
+         *  Reaction with Yellow (Conductive) → Green Volatile → instant AOE detonation. */
+        val CyanCartridge = ArtifactDefinition(
+            id = "cyan_cartridge",
+            name = "Cyan Cartridge",
+            tier = ArtifactTier.RARE,
+            archetypeTag = "CMYK Alchemy",
+            description = "[Cyan] Your attacks Chill enemies (-35% speed). Combine with Yellow for a Volatile detonation reaction.",
+            moveSpeedModifier = 0f,
+            damageModifier = 0f
+        )
+
+        /** Magenta Cartridge — Corrosive/Armor Shred pigment.
+         *  Hit enemies gain magentaTimer → incoming damage +40% for duration.
+         *  Reaction with Cyan → Purple Dissolve → DoT melt. */
+        val MagentaCartridge = ArtifactDefinition(
+            id = "magenta_cartridge",
+            name = "Magenta Cartridge",
+            tier = ArtifactTier.RARE,
+            archetypeTag = "CMYK Alchemy",
+            description = "[Magenta] Your attacks Corrode enemies (+40% damage taken). Combine with Cyan for a Dissolve reaction.",
+            damageModifier = 0.10f
+        )
+
+        /** Yellow Cartridge — Conductive/Chain Lightning pigment.
+         *  Hit enemies gain yellowTimer → next hit chains to 3 nearby enemies.
+         *  Reaction with Cyan (Chill) → Green Volatile. */
+        val YellowCartridge = ArtifactDefinition(
+            id = "yellow_cartridge",
+            name = "Yellow Cartridge",
+            tier = ArtifactTier.RARE,
+            archetypeTag = "CMYK Alchemy",
+            description = "[Yellow] Your attacks Conduct electricity, chaining to 3 nearby enemies. Combine with Cyan for a Volatile detonation.",
+            attackSpeedModifier = 0.10f
+        )
+
+        // ══════════════════════════════════════════════════════════════════════
+        // PHASE 8: CANVAS DEGRADATION (Pre-Run Negative Modifiers / Heat System)
+        // Activatable before a run for bonus Gold/Crystal at end.
+        // ══════════════════════════════════════════════════════════════════════
+
+        /** Torn Edges — Map boundary shrinks/expands dynamically; touching edge
+         *  deals heavy damage. +40% Gold/Crystal payout. */
+        val TornEdges = ArtifactDefinition(
+            id = "torn_edges",
+            name = "Torn Edges",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = "Canvas Degradation",
+            description = "[Heat] Map boundary pulses dynamically. Touching the edge deals 50 damage/s. Reward: +40% Gold/Crystal payout."
+        )
+
+        /** Spilled Bleach — Random un-inkable white void patches appear. Spells
+         *  passing through them are instantly erased. +30% payout. */
+        val SpilledBleach = ArtifactDefinition(
+            id = "spilled_bleach",
+            name = "Spilled Bleach",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = "Canvas Degradation",
+            description = "[Heat] Void patches randomly erase projectiles and puddles passing through them. Reward: +30% Gold/Crystal payout."
+        )
+
+        /** Drafting Errors — Every 5 minutes a hostile clone of your build spawns. +50% payout. */
+        val DraftingErrors = ArtifactDefinition(
+            id = "drafting_errors",
+            name = "Drafting Errors",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = "Canvas Degradation",
+            description = "[Heat] Every 5 minutes, a hostile Mirror-Clone of your current build spawns. Reward: +50% Gold/Crystal payout."
+        )
+
+        // Phase 7 Cursed Artifact lists
+        val Phase7CursedList = listOf(TheLeakyPen, TheBrokenMetronome)
+
+        // Phase 8 CMYK Cartridge list
+        val CMYKCartridgeList = listOf(CyanCartridge, MagentaCartridge, YellowCartridge)
+
+        // Phase 8 Canvas Degradation (pre-run modifiers) list
+        val CanvasDegradationList = listOf(TornEdges, SpilledBleach, DraftingErrors)
     }
 }
+

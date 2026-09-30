@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MonetizationOn
@@ -50,8 +52,8 @@ fun GameOverDialog(
     val minutes = (uiState.timeSurvivedSeconds / 60).toInt()
     val seconds = (uiState.timeSurvivedSeconds % 60).toInt()
     val timeFormatted = String.format("%02d:%02d", minutes, seconds)
-    val goldEarned = uiState.kills
-    val crystalsEarned = minutes * 10
+    val goldEarned = if (uiState.goldEarnedThisRun > 0) uiState.goldEarnedThisRun else if (uiState.isMinute61Victory) uiState.kills * 2 else uiState.kills
+    val crystalsEarned = if (uiState.crystalsEarnedThisRun > 0) uiState.crystalsEarnedThisRun else if (uiState.isMinute61Victory) (minutes * 10) * 2 else minutes * 10
 
     Dialog(
         onDismissRequest = {},
@@ -73,23 +75,62 @@ fun GameOverDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (uiState.isVictory) "CHRONICLE SEALED" else "INK DEPLETED",
+                    text = if (uiState.isMinute61Victory) "THE ERASURE SHATTERED!" else if (uiState.isVictory) "CHRONICLE SEALED" else "INK DEPLETED",
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Black,
-                    fontSize = 22.sp,
-                    color = Color.Black,
-                    letterSpacing = 1.5.sp
+                    fontSize = 20.sp,
+                    color = if (uiState.isMinute61Victory) Color(0xFFD32F2F) else Color.Black,
+                    letterSpacing = 1.2.sp
                 )
 
                 Text(
-                    text = if (uiState.isVictory) "You conquered the 60-minute parchment swarm!" else "The paper construct legion overwhelmed your quill.",
+                    text = if (uiState.isMinute61Victory) "Absolute Victory! You survived Minute 61 and dissolved The Eraser Monolith!"
+                    else if (uiState.isVictory) "You conquered the 60-minute parchment swarm!"
+                    else "The paper construct legion overwhelmed your quill.",
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
                     color = Color(0xFF666666),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                 )
 
-                // Currency Payout Card (Phase 4 Post-Run Economy)
+                // Phase 5 Climax Victory Multiplier Banner
+                if (uiState.isMinute61Victory) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFFFF8E1))
+                            .border(1.5.dp, Color(0xFFFFB300), RoundedCornerShape(10.dp))
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color(0xFFF57F17),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "2X CLIMAX MULTIPLIER APPLIED",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFE65100)
+                                )
+                                Text(
+                                    text = "Map Tier 2: The Forbidden Archive Unlocked!",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    color = Color(0xFFBF360C)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                // Currency Payout Card (Phase 4 & 5 Post-Run Economy)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -97,10 +138,10 @@ fun GameOverDialog(
                         .background(Color(0xFF141312))
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertizontally
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Gold Payout
-                    Row(verticalAlignment = Alignment.CenterVertizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.MonetizationOn,
                             contentDescription = null,
@@ -131,7 +172,7 @@ fun GameOverDialog(
                     )
 
                     // Crystals Payout
-                    Row(verticalAlignment = Alignment.CenterVertizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Diamond,
                             contentDescription = null,
@@ -238,7 +279,7 @@ private fun StatRow(label: String, value: String) {
             .fillMaxWidth()
             .padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertizontally
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,

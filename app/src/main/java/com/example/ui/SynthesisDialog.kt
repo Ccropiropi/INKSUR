@@ -118,7 +118,7 @@ fun SynthesisDialog(
                             .padding(16.dp)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertizontally,
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -153,7 +153,7 @@ fun SynthesisDialog(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color(0xFFEBEBEB))
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertizontally,
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(

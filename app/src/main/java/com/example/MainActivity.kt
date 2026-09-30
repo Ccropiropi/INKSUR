@@ -20,6 +20,7 @@ import com.example.ui.BattleScreen
 import com.example.ui.BlankScrollDialog
 import com.example.ui.BrokenStoneDialog
 import com.example.ui.GameOverDialog
+import com.example.ui.InkwellDialog
 import com.example.ui.LevelUpDialog
 import com.example.ui.MainMenuScreen
 import com.example.ui.ObeliskDialog
@@ -57,6 +58,7 @@ fun InkSurvivorApp(viewModel: GameViewModel = viewModel()) {
             ScreenState.OBELISK -> { /* Modal requires artifact choice */ }
             ScreenState.BROKEN_STONE -> viewModel.closeBrokenStone()
             ScreenState.BLANK_SCROLL -> { /* Modal requires selecting item */ }
+            ScreenState.INKWELL_CHECKPOINT -> { /* Modal requires user choice */ }
             ScreenState.GAME_OVER -> viewModel.setScreen(ScreenState.MAIN_MENU)
             ScreenState.MAIN_MENU -> {}
         }
@@ -171,6 +173,22 @@ fun InkSurvivorApp(viewModel: GameViewModel = viewModel()) {
                             uiState = uiState,
                             onResume = { viewModel.resumeGame() },
                             onAbandon = { viewModel.setScreen(ScreenState.MAIN_MENU) }
+                        )
+                    }
+
+                    ScreenState.INKWELL_CHECKPOINT -> {
+                        InkwellDialog(
+                            currentOrbs = viewModel.player.xp,
+                            shopArtifacts = uiState.inkwellShopChoices,
+                            onPurchaseArtifact = { artifact ->
+                                viewModel.purchaseInkwellArtifact(artifact)
+                            },
+                            onRestAndResume = {
+                                viewModel.restAndResumeFromInkwell()
+                            },
+                            onBookmarkAndExit = {
+                                viewModel.bookmarkRunAndExit()
+                            }
                         )
                     }
 

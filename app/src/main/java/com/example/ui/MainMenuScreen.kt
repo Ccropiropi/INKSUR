@@ -25,11 +25,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
@@ -105,7 +107,7 @@ fun MainMenuScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Gold & Crystal Badges
-                Row(verticalAlignment = Alignment.CenterVertizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -113,7 +115,7 @@ fun MainMenuScreen(
                             .border(1.dp, Color(0xFFFFD54F), RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.MonetizationOn,
                                 contentDescription = "Gold",
@@ -139,7 +141,7 @@ fun MainMenuScreen(
                             .border(1.dp, Color(0xFF81D4FA), RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Diamond,
                                 contentDescription = "Crystals",
@@ -208,7 +210,7 @@ fun MainMenuScreen(
                         letterSpacing = 1.5.sp
                     )
                     Text(
-                        text = "Phase 4: Endgame Loop & Asynchronous Synthesis",
+                        text = "Phase 5: The Mid-Run Checkpoint, The Blotter & The Erasure",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFE0E0E0)
@@ -279,7 +281,7 @@ fun MainMenuScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertizontally
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
@@ -302,7 +304,7 @@ fun MainMenuScreen(
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertizontally
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         text = charDef.name,
@@ -373,7 +375,7 @@ fun MainMenuScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertizontally
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
@@ -391,7 +393,7 @@ fun MainMenuScreen(
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertizontally
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         text = classDef.name,
@@ -408,6 +410,139 @@ fun MainMenuScreen(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (isSelected) Color(0xFFD32F2F) else Color(0xFF555555)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Map Tier Selection (Tier 1: Void Scratchpad, Tier 2: The Forbidden Archive)
+                Text(
+                    text = "SELECT MAP TIER",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF666666),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val tier1Selected = uiState.selectedMapTier == 1
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { viewModel.selectMapTier(1) }
+                            .testTag("map_tier_1"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (tier1Selected) Color(0xFFFFF9F9) else Color(0xFFFAFAFA)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = if (tier1Selected) 2.dp else 1.dp,
+                            color = if (tier1Selected) Color(0xFFD32F2F) else Color(0xFFE0E0E0)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Map, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Tier 1", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Black)
+                            }
+                            Text("The Scratchpad", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF444444))
+                            Text("Standard void arena", fontSize = 9.sp, color = Color(0xFF777777))
+                        }
+                    }
+
+                    val tier2Unlocked = progress.unlockedMapTier >= 2 || uiState.unlockedMapTier >= 2
+                    val tier2Selected = uiState.selectedMapTier == 2
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = tier2Unlocked) { if (tier2Unlocked) viewModel.selectMapTier(2) }
+                            .testTag("map_tier_2"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (tier2Selected) Color(0xFFFFF8E1) else if (tier2Unlocked) Color(0xFFFAFAFA) else Color(0xFFEEEEEE)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = if (tier2Selected) 2.dp else 1.dp,
+                            color = if (tier2Selected) Color(0xFFF57F17) else Color(0xFFE0E0E0)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (tier2Unlocked) Icons.Default.AutoAwesome else Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = if (tier2Unlocked) Color(0xFFF57F17) else Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Tier 2", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (tier2Unlocked) Color.Black else Color.Gray)
+                            }
+                            Text("Forbidden Archive", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (tier2Unlocked) Color(0xFF444444) else Color.Gray)
+                            Text(if (tier2Unlocked) "+50% Payout Bonus" else "Clear Min 61 Climax", fontSize = 9.sp, color = if (tier2Unlocked) Color(0xFFE65100) else Color.Gray)
+                        }
+                    }
+                }
+
+                // Bookmark Card (if active)
+                if (uiState.hasBookmarkRun || viewModel.saveManager.hasBookmark()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .testTag("bookmark_card"),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                        border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF00E676))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Bookmark,
+                                    contentDescription = "Bookmark",
+                                    tint = Color(0xFF00897B),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "BOOKMARKED RUN DETECTED",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF004D40)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Saved at Minute 30:00 Inkwell Sanctuary. Note: Resuming will delete this bookmark to maintain roguelike integrity.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF00695C)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = { viewModel.resumeBookmarkedRun() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .testTag("resume_bookmark_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "RESUME BOOKMARKED RUN",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = Color.White
                                 )
                             }
                         }
@@ -507,7 +642,7 @@ fun MainMenuScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertizontally,
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
@@ -571,11 +706,11 @@ private fun MetaStatUpgradeRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertizontally,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(text = "Lv.$level / $maxLevel", fontSize = 10.sp, color = Color(0xFFF57F17), fontWeight = FontWeight.Bold)

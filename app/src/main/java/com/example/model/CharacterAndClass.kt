@@ -207,7 +207,9 @@ enum class SpellRuneType(
 enum class SpellCastType {
     DIRECTIONAL_PROJECTILE,
     PHYSICS_OVERLAP_ARC,
-    OMNIDIRECTIONAL_BARRAGE
+    OMNIDIRECTIONAL_BARRAGE,
+    // Phase 7: Wave that travels forward and leaves a brief damaging trail
+    WAVE_TRAIL
 }
 
 data class SpellDefinition(
@@ -323,11 +325,34 @@ data class SpellDefinition(
             isUltimate = true
         )
 
+        // ─── Phase 7: Sacrificial Fusion Result Spells ───────────────────────
+        /** The Rending Tide — Quill Dart (Primary) fused with Wash Brush (Catalyst/Sacrificed).
+         *  Player loses the defensive AOE puddle system forever.
+         *  Instead: fires a massive wave of piercing ink that leaves brief damaging trail segments.
+         *  Forces a shift from static defensive positioning → constant forward aggression. */
+        val TheRendingTide = SpellDefinition(
+            id = "the_rending_tide",
+            name = "The Rending Tide",
+            description = "A massive surging wave of ink tears through everything in its path, leaving a brief corrosive trail. The Wash Brush is lost forever.",
+            castType = SpellCastType.WAVE_TRAIL,
+            baseDamage = 95f,
+            baseCooldown = 1.40f,
+            baseSpeed = 480f,
+            basePierce = 99999,       // infinite piercing — hits all enemies in the wave
+            projectileLength = 120f,  // wide wave front
+            projectileWidth = 28f
+        )
+
         val baseSpells = listOf(QuillDart, WashBrush, SteelFountain)
         val evolvedSpells = listOf(TheHarpoon, InkwellVortex, FountainBarrage)
-        val allSpells = listOf(QuillDart, WashBrush, SteelFountain, TheHarpoon, InkwellVortex, FountainBarrage, TheMastersDecree)
+        val allSpells = listOf(
+            QuillDart, WashBrush, SteelFountain,
+            TheHarpoon, InkwellVortex, FountainBarrage,
+            TheMastersDecree, TheRendingTide
+        )
     }
 }
+
 
 // Synthesis Recipe definition
 data class SpellSynthesisRecipe(
@@ -373,7 +398,60 @@ data class SpellSynthesisRecipe(
     }
 }
 
-data class ActiveSpell(
+/**
+ * Phase 7: Sacrificial Fusion Recipe
+ *
+ * Unlike synthesis (which preserves both spells), a Fusion:
+ *  1. Takes the PRIMARY spell (mutated/upgraded)
+ *  2. Permanently DELETES the CATALYST spell from inventory
+ *  3. Replaces the primary spell with [fusedSpell]
+ *
+ * This forces a fundamental playstyle shift — the player cannot undo the sacrifice.
+ */
+data class FusionRecipe(
+    val id: String,
+    val name: String,
+    val primarySpellId: String,    // Spell that gets mutated (upgraded)
+    val catalystSpellId: String,   // Spell that is SACRIFICED and permanently deleted
+    val fusedSpell: SpellDefinition,
+    val description: String,
+    val playstyleWarning: String   // Shown before confirming — warns player of the shift
+) {
+    companion object {
+        /**
+         * Implementation Test: "The Rending Tide"
+         * Primary:  Quill Dart  (continues as the evolved form)
+         * Catalyst: Wash Brush  (permanently DELETED from inventory)
+         *
+         * Before: static defensive positioning (puddles protect player)
+         * After:  constant forward aggression (must keep moving to ride the wave)
+         */
+        val RendingTideFusion = FusionRecipe(
+            id = "fusion_rending_tide",
+            name = "The Rending Tide",
+            primarySpellId = "quill_dart",
+            catalystSpellId = "wash_brush",
+            fusedSpell = SpellDefinition.TheRendingTide,
+            description = "Your Quill Dart absorbs the fluid nature of the Wash Brush, erupting into a massive surging ink wave that leaves corrosive trails.",
+            playstyleWarning = "⚠ The Wash Brush will be PERMANENTLY DELETED. Your defensive puddle system is gone forever. You must now stay mobile."
+        )
+
+        val allFusions = listOf(RendingTideFusion)
+
+        /** Find if player's current spells qualify for any known fusion. */
+        fun findAvailableFusion(spells: List<ActiveSpell>, completedFusions: Set<String>): FusionRecipe? {
+            for (fusion in allFusions) {
+                if (completedFusions.contains(fusion.id)) continue
+                val hasPrimary = spells.any { it.definition.id == fusion.primarySpellId && it.rank >= 7 }
+                val hasCatalyst = spells.any { it.definition.id == fusion.catalystSpellId && it.rank >= 7 }
+                if (hasPrimary && hasCatalyst) return fusion
+            }
+            return null
+        }
+    }
+}
+
+
     val definition: SpellDefinition,
     var rank: Int = 1,
     var cooldownTimer: Float = 0f,

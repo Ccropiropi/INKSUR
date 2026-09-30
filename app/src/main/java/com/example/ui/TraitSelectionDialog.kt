@@ -115,7 +115,7 @@ fun TraitSelectionDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertizontally
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
@@ -136,7 +136,7 @@ fun TraitSelectionDialog(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertizontally,
+                                    verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {

@@ -58,18 +58,22 @@ import androidx.compose.ui.unit.sp
 import com.example.game.GameUIState
 import com.example.game.GameViewModel
 import com.example.model.BlankScrollDrop
+import com.example.model.BlotterBurstVisual
 import com.example.model.BrokenStoneEntity
 import com.example.model.DamageNumber
 import com.example.model.Enemy
 import com.example.model.EnemyType
 import com.example.model.InkPuddle
 import com.example.model.InkProjectile
+import com.example.model.InkwellStructure
 import com.example.model.InkwellVortexEntity
 import com.example.model.MagnumOpusVisual
 import com.example.model.ObeliskEntity
 import com.example.model.Orb
 import com.example.model.RedRuneEntity
 import com.example.model.SpellRuneDrop
+import com.example.model.TelegraphedStrike
+import com.example.model.TheEraserBoss
 import com.example.model.WashBrushArcVisual
 import kotlin.math.PI
 import kotlin.math.cos
@@ -121,9 +125,13 @@ fun BattleScreen(
         val screenCenterX = screenWidth / 2f
         val screenCenterY = screenHeight / 2f
 
-        // Camera: 2D top-down perspective, locked to player character
-        val camX = screenCenterX - viewModel.player.x
-        val camY = screenCenterY - viewModel.player.y
+        // Camera: 2D top-down perspective, locked to player character + screen shake
+        val shakeMag = uiState.screenShakeTimer * 12f
+        val shakeX = if (shakeMag > 0f) sin(uiState.timeSurvivedSeconds * 50f) * shakeMag else 0f
+        val shakeY = if (shakeMag > 0f) cos(uiState.timeSurvivedSeconds * 45f) * shakeMag else 0f
+
+        val camX = screenCenterX - viewModel.player.x + shakeX
+        val camY = screenCenterY - viewModel.player.y + shakeY
 
         // Custom Game Canvas
         Canvas(
@@ -133,6 +141,11 @@ fun BattleScreen(
         ) {
             // 1. Draw The Scratchpad grid
             drawScratchpadBackground(camX, camY)
+
+            // 1.1 Draw The Eraser Arena Boundary & Void (Phase 5 Climax)
+            if (viewModel.theEraserBoss.active) {
+                drawEraserArena(viewModel.theEraserBoss, camX, camY)
+            }
 
             // 2. Draw Ink Puddles (The Puddle System: static 2D decals)
             for (puddle in viewModel.puddlePool.pool) {
@@ -166,6 +179,11 @@ fun BattleScreen(
                 drawBrokenStone(stone, camX, camY)
             }
 
+            // 4.3 Draw The Sacred Inkwell Structure (Phase 5 Minute 30:00 Checkpoint)
+            for (inkwell in viewModel.inkwellStructures) {
+                drawInkwell(inkwell, camX, camY)
+            }
+
             // 5. Draw Spell Rune Drops (dropped by last Elite)
             for (drop in viewModel.spellRuneDrops) {
                 drawSpellRuneDrop(drop, camX, camY)
@@ -181,9 +199,14 @@ fun BattleScreen(
                 drawOrb(orb, camX, camY)
             }
 
-            // 7. Draw Enemies & Elites
+            // 7. Draw Enemies, Elites & The Blotter
             for (enemy in viewModel.enemies) {
                 drawEnemy(enemy, camX, camY)
+            }
+
+            // 7.1 Draw Blotter Burst AOE Visuals
+            for (burst in viewModel.blotterBurstVisuals) {
+                drawBlotterBurst(burst, camX, camY)
             }
 
             // 8. Draw Player Attacks (Quill Darts & Evolved Spells)
@@ -199,6 +222,13 @@ fun BattleScreen(
                 isInvincible = viewModel.player.isInvincible,
                 isPainter = uiState.playerClass.id == "painter"
             )
+
+            // 9.1 Draw Telegraphed Geometric Eraser Strikes (Phase 5 Climax)
+            if (viewModel.theEraserBoss.active) {
+                for (strike in viewModel.theEraserBoss.telegraphedStrikes) {
+                    drawTelegraphedStrike(strike, camX, camY)
+                }
+            }
 
             // 10. Draw Damage Numbers
             for (dn in viewModel.damageNumbers) {
@@ -581,6 +611,38 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float) {
             val hpRatio = (enemy.hp / enemy.maxHp).coerceIn(0f, 1f)
             drawRect(color = Color(0xFF00E676), topLeft = Offset(ex - barW / 2f, barY), size = androidx.compose.ui.geometry.Size(barW * hpRatio, barH))
             drawRect(color = Color.White, topLeft = Offset(ex - barW / 2f, barY), size = androidx.compose.ui.geometry.Size(barW, barH), style = Stroke(width = 1.5f))
+        }
+
+        EnemyType.THE_BLOTTER -> {
+            // Porous cellulose sponge texture with sumi-e shading
+            val path = Path().apply {
+                moveTo(ex - r, ey - r * 0.8f)
+                lineTo(ex + r, ey - r * 0.8f)
+                lineTo(ex + r * 1.15f, ey + r * 0.8f)
+                lineTo(ex - r * 1.15f, ey + r * 0.8f)
+                close()
+            }
+            // Sponge fill
+            drawPath(path = path, color = Color(0xFFE0F2F1))
+            drawPath(path = path, color = Color(0xFF00796B), style = Stroke(width = outlineWidth + 1.5f))
+
+            // Cellulose sponge pore pockets
+            drawCircle(color = Color(0xFF004D40), radius = 5f, center = Offset(ex - r * 0.4f, ey - r * 0.2f))
+            drawCircle(color = Color(0xFF004D40), radius = 4f, center = Offset(ex + r * 0.3f, ey - r * 0.1f))
+            drawCircle(color = Color(0xFF004D40), radius = 6f, center = Offset(ex, ey + r * 0.3f))
+            drawCircle(color = Color(0xFF80CBC4), radius = 3f, center = Offset(ex - r * 0.2f, ey + r * 0.4f))
+
+            // Absorbing ink liquid ripples around sponge
+            val rippleR = r * 1.25f + sin(enemy.flashTimer * 10f) * 3f
+            drawCircle(color = Color(0xFF009688).copy(alpha = 0.35f), radius = rippleR, center = Offset(ex, ey), style = Stroke(width = 2.5f))
+
+            // Health bar
+            val barW = 75f
+            val barH = 6f
+            val barY = ey - r - 16f
+            drawRect(color = Color(0x88000000), topLeft = Offset(ex - barW / 2f, barY), size = androidx.compose.ui.geometry.Size(barW, barH))
+            val hpRatio = (enemy.hp / enemy.maxHp).coerceIn(0f, 1f)
+            drawRect(color = Color(0xFF00BFA5), topLeft = Offset(ex - barW / 2f, barY), size = androidx.compose.ui.geometry.Size(barW * hpRatio, barH))
         }
     }
 
@@ -1100,3 +1162,240 @@ fun BattleHUD(
         }
     }
 }
+
+// ---------------- PHASE 5 CANVAS DRAWING HELPERS ----------------
+
+// Phase 5 Mid-Run Checkpoint: The Inkwell structure (Minute 30:00)
+private fun DrawScope.drawInkwell(inkwell: InkwellStructure, camX: Float, camY: Float) {
+    val ix = inkwell.x + camX
+    val iy = inkwell.y + camY
+    val r = inkwell.radius
+    val pulse = sin(inkwell.pulseTimer * 3.5f) * 4f
+
+    // Outer sanctuary protective aura (soft jade/cyan glow)
+    drawCircle(
+        color = Color(0xFF00E676).copy(alpha = 0.18f),
+        radius = r * 1.8f + pulse,
+        center = Offset(ix, iy)
+    )
+    drawCircle(
+        color = Color(0xFF00BFA5).copy(alpha = 0.28f),
+        radius = r * 1.35f + pulse * 0.6f,
+        center = Offset(ix, iy),
+        style = Stroke(width = 3f)
+    )
+
+    // Ceramic Inkwell Basin: sumi-e porcelain body with golden lacquer
+    val potPath = Path().apply {
+        moveTo(ix - r * 0.85f, iy - r * 0.7f)
+        lineTo(ix + r * 0.85f, iy - r * 0.7f)
+        lineTo(ix + r * 1.05f, iy + r * 0.6f)
+        lineTo(ix - r * 1.05f, iy + r * 0.6f)
+        close()
+    }
+    drawPath(path = potPath, color = Color(0xFF1F1F1F))
+    drawPath(path = potPath, color = Color(0xFFC5A059), style = Stroke(width = 3.5f))
+
+    // Ink pool inside the well
+    drawCircle(
+        color = StarkBlackInk,
+        radius = r * 0.55f,
+        center = Offset(ix, iy - 2f)
+    )
+    // Deep glossy highlight inside inkwell
+    drawCircle(
+        color = Color(0xFFE0E0E0).copy(alpha = 0.7f),
+        radius = 4f,
+        center = Offset(ix - 6f, iy - 8f)
+    )
+
+    // Calligraphy character / seal mark on front of well
+    drawLine(
+        color = Color(0xFFC5A059),
+        start = Offset(ix - r * 0.4f, iy + r * 0.15f),
+        end = Offset(ix + r * 0.4f, iy + r * 0.15f),
+        strokeWidth = 2.5f
+    )
+    drawLine(
+        color = Color(0xFFC5A059),
+        start = Offset(ix, iy - r * 0.1f),
+        end = Offset(ix, iy + r * 0.45f),
+        strokeWidth = 2.5f
+    )
+}
+
+// Phase 5 The Blotter sponge death AOE shockwave burst
+private fun DrawScope.drawBlotterBurst(burst: BlotterBurstVisual, camX: Float, camY: Float) {
+    val bx = burst.x + camX
+    val by = burst.y + camY
+    val progress = (burst.timer / burst.maxDuration).coerceIn(0f, 1f)
+    val curRadius = burst.radius * progress
+    val alpha = (1f - progress).coerceIn(0f, 1f)
+
+    // Expanding shockwave circle
+    drawCircle(
+        color = Color(0xFF00BFA5).copy(alpha = 0.25f * alpha),
+        radius = curRadius,
+        center = Offset(bx, by)
+    )
+    drawCircle(
+        color = Color(0xFF004D40).copy(alpha = 0.8f * alpha),
+        radius = curRadius,
+        center = Offset(bx, by),
+        style = Stroke(width = 6f * (1f - progress * 0.5f))
+    )
+    drawCircle(
+        color = StarkBlackInk.copy(alpha = 0.6f * alpha),
+        radius = curRadius * 0.75f,
+        center = Offset(bx, by),
+        style = Stroke(width = 3.5f)
+    )
+
+    // Kinetic splatter ink spikes radiating outward
+    val spikeCount = 8
+    for (i in 0 until spikeCount) {
+        val angle = (i * 2 * PI / spikeCount).toFloat() + progress * 0.5f
+        val spikeStart = curRadius * 0.4f
+        val spikeEnd = curRadius * 1.05f
+        drawLine(
+            color = Color(0xFF00796B).copy(alpha = 0.75f * alpha),
+            start = Offset(bx + cos(angle) * spikeStart, by + sin(angle) * spikeStart),
+            end = Offset(bx + cos(angle) * spikeEnd, by + sin(angle) * spikeEnd),
+            strokeWidth = 4f * alpha,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+// Phase 5 The Eraser Arena Boundary & Monolith (Minute 60 Climax)
+private fun DrawScope.drawEraserArena(eraser: TheEraserBoss, camX: Float, camY: Float) {
+    val cx = 0f + camX
+    val cy = 0f + camY
+    val safeR = eraser.currentSafeRadius
+
+    // 1. Outside Erasure Void overlay: A thick wash erasing the canvas outside the safe zone
+    val voidStroke = 1600f
+    drawCircle(
+        color = Color(0xFFFAFAFA).copy(alpha = 0.65f),
+        radius = safeR + voidStroke / 2f,
+        center = Offset(cx, cy),
+        style = Stroke(width = voidStroke)
+    )
+
+    // 2. Safe zone boundary barrier (Stark crimson & black warning ring)
+    val pulse = sin(eraser.timer * 6f) * 3f
+    drawCircle(
+        color = Color(0xFFD32F2F).copy(alpha = 0.25f),
+        radius = safeR + 8f + pulse,
+        center = Offset(cx, cy),
+        style = Stroke(width = 4f)
+    )
+    drawCircle(
+        color = Color(0xFFD32F2F),
+        radius = safeR,
+        center = Offset(cx, cy),
+        style = Stroke(width = 3f)
+    )
+    drawCircle(
+        color = StarkBlackInk,
+        radius = safeR - 3f,
+        center = Offset(cx, cy),
+        style = Stroke(width = 2f)
+    )
+
+    // 3. The Eraser Entity at the center (0, 0)
+    // A colossal geometric prism / rubber block floating and rotating
+    val bossAngle = eraser.timer * 25f
+    rotate(degrees = bossAngle, pivot = Offset(cx, cy)) {
+        val bw = 64f
+        val bh = 36f
+        drawRect(
+            color = Color(0xFFF0F0F0),
+            topLeft = Offset(cx - bw, cy - bh),
+            size = androidx.compose.ui.geometry.Size(bw * 2f, bh * 2f)
+        )
+        // Blue angled sleeve band
+        drawRect(
+            color = Color(0xFF1E88E5),
+            topLeft = Offset(cx - bw * 0.4f, cy - bh),
+            size = androidx.compose.ui.geometry.Size(bw * 0.8f, bh * 2f)
+        )
+        drawRect(
+            color = StarkBlackInk,
+            topLeft = Offset(cx - bw, cy - bh),
+            size = androidx.compose.ui.geometry.Size(bw * 2f, bh * 2f),
+            style = Stroke(width = 3.5f)
+        )
+        // Menacing red core glyph
+        drawCircle(
+            color = Color(0xFFD32F2F),
+            radius = 10f,
+            center = Offset(cx, cy)
+        )
+    }
+
+    // Health/Survival timer ring around the Eraser
+    val progress = (eraser.timer / eraser.maxDuration).coerceIn(0f, 1f)
+    drawArc(
+        color = Color(0xFFD32F2F),
+        startAngle = -90f,
+        sweepAngle = progress * 360f,
+        useCenter = false,
+        topLeft = Offset(cx - 80f, cy - 80f),
+        size = androidx.compose.ui.geometry.Size(160f, 160f),
+        style = Stroke(width = 4f, cap = StrokeCap.Round)
+    )
+}
+
+// Phase 5 Telegraphed Geometric Eraser Strikes
+private fun DrawScope.drawTelegraphedStrike(strike: TelegraphedStrike, camX: Float, camY: Float) {
+    val sx = strike.startX + camX
+    val sy = strike.startY + camY
+    val ex = strike.endX + camX
+    val ey = strike.endY + camY
+
+    if (!strike.isStriking) {
+        // Telegraph warning phase (transparent red laser guide with dashed feel)
+        val progress = (strike.timer / strike.telegraphDuration).coerceIn(0f, 1f)
+        val alpha = 0.25f + progress * 0.45f
+        val pulseWidth = strike.lineWidth * (0.6f + 0.4f * sin(strike.timer * 12f))
+
+        // Outer danger corridor
+        drawLine(
+            color = Color(0xFFD32F2F).copy(alpha = alpha * 0.4f),
+            start = Offset(sx, sy),
+            end = Offset(ex, ey),
+            strokeWidth = pulseWidth,
+            cap = StrokeCap.Round
+        )
+        // Sharp center laser trace
+        drawLine(
+            color = Color(0xFFD32F2F).copy(alpha = alpha),
+            start = Offset(sx, sy),
+            end = Offset(ex, ey),
+            strokeWidth = 3f,
+            cap = StrokeCap.Round
+        )
+    } else {
+        // Active striking laser beam (incinerating blinding cut)
+        val strikeProgress = ((strike.timer - strike.telegraphDuration) / strike.strikeDuration).coerceIn(0f, 1f)
+        val beamAlpha = (1f - strikeProgress).coerceIn(0.2f, 1f)
+
+        // Broad white-hot core
+        drawLine(
+            color = Color(0xFFD32F2F).copy(alpha = beamAlpha),
+            start = Offset(sx, sy),
+            end = Offset(ex, ey),
+            strokeWidth = strike.lineWidth * 1.2f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = Color.White.copy(alpha = beamAlpha),
+            start = Offset(sx, sy),
+            end = Offset(ex, ey),
+            strokeWidth = strike.lineWidth * 0.5f,
+            cap = StrokeCap.Round
+        )
+    }
+}
+

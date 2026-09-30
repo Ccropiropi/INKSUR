@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
+import com.example.data.BookmarkRunState
 import com.example.data.GameRepository
 import com.example.data.PlayerProgressEntity
 import com.example.data.RunRecordEntity
@@ -13,6 +14,7 @@ import com.example.data.SaveManager
 import com.example.model.ActiveSpell
 import com.example.model.ArtifactDefinition
 import com.example.model.BlankScrollDrop
+import com.example.model.BlotterBurstVisual
 import com.example.model.BrokenStoneEntity
 import com.example.model.CharacterDefinition
 import com.example.model.ClassDefinition
@@ -26,6 +28,7 @@ import com.example.model.GearType
 import com.example.model.InkPuddle
 import com.example.model.InkPuddlePool
 import com.example.model.InkProjectile
+import com.example.model.InkwellStructure
 import com.example.model.InkwellVortexEntity
 import com.example.model.LevelUpChoice
 import com.example.model.MagnumOpusVisual
@@ -43,6 +46,8 @@ import com.example.model.SpellRuneType
 import com.example.model.SpellSynthesisRecipe
 import com.example.model.SpellTraitModule
 import com.example.model.SpellTraitType
+import com.example.model.TelegraphedStrike
+import com.example.model.TheEraserBoss
 import com.example.model.WashBrushArcVisual
 import com.example.model.WideBristleTrait
 import com.example.ui.InjectedItemTarget
@@ -71,6 +76,7 @@ enum class ScreenState {
     OBELISK,
     BROKEN_STONE,
     BLANK_SCROLL,
+    INKWELL_CHECKPOINT,
     GAME_OVER
 }
 
@@ -119,15 +125,28 @@ data class GameUIState(
     val brokenStoneChoices: List<ArtifactDefinition> = emptyList(),
     val heavyWeightCount: Int = 0,
     val isHeavyWeightMastered: Boolean = false,
+    val corruptedCount: Int = 0,
+    val isCorruptedMastered: Boolean = false,
+    val geometryCount: Int = 0,
+    val isGeometryMastered: Boolean = false,
     val titanSpawned: Boolean = false,
     val midBossSpawned: Boolean = false,
+    val inkwellActive: Boolean = false,
+    val inkwellShopChoices: List<ArtifactDefinition> = emptyList(),
+    val screenShakeTimer: Float = 0f,
+    val eraserActive: Boolean = false,
+    val eraserSafeRadius: Float = 600f,
+    val hasBookmarkRun: Boolean = false,
+    val unlockedMapTier: Int = 1,
+    val selectedMapTier: Int = 1,
     val pendingTraitSpellName: String = "",
     val pendingTraitOptions: List<SpellTraitType> = emptyList(),
     val guaranteedNextItem: LevelUpChoice? = null,
     val magnumOpusActive: Boolean = false,
     val goldEarnedThisRun: Int = 0,
     val crystalsEarnedThisRun: Int = 0,
-    val isVictory: Boolean = false
+    val isVictory: Boolean = false,
+    val isMinute61Victory: Boolean = false
 )
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
@@ -141,11 +160,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val runHistory: StateFlow<List<RunRecordEntity>> = repository.allRuns
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val player = PlayerState()
+
     private val _uiState = MutableStateFlow(GameUIState())
     val uiState: StateFlow<GameUIState> = _uiState.asStateFlow()
 
-    // Simulation entities
-    val player = PlayerState()
+    // Simulation Entities
     val enemies = mutableListOf<Enemy>()
     val inkProjectiles = mutableListOf<InkProjectile>()
     val puddlePool = InkPuddlePool(capacity = 200)
@@ -160,6 +180,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val orbs = mutableListOf<Orb>()
     val damageNumbers = mutableListOf<DamageNumber>()
 
+    // Phase 5 Entities
+    val inkwellStructures = mutableListOf<InkwellStructure>()
+    val blotterBurstVisuals = mutableListOf<BlotterBurstVisual>()
+    val theEraserBoss = TheEraserBoss()
+
     // Entity counters & Timers
     private var entityIdCounter: Long = 0
     private var enemySpawnTimer: Float = 0f
@@ -172,12 +197,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // Broken Stone spawn timer
     private var nextBrokenStoneTime: Float = 90f
 
-    // Pacing Bosses
+    // Pacing Bosses & Events
     private var titanSpawned: Boolean = false
     private var midBossSpawned: Boolean = false
+    private var inkwellSpawned: Boolean = false
+    private var enemySpawningHalted: Boolean = false
+    private var eraserStarted: Boolean = false
+    var screenShakeTimer: Float = 0f
 
-    // Phase 4 Systems: SynthesisManager & SaveManager
+    // Phase 4 & 5 Core Managers
     val synthesisManager = SynthesisManager()
+    val masteryManager = MasteryManager()
     val saveManager = SaveManager(application)
 
     val slot1Unlocked: Boolean get() = synthesisManager.slot1Unlocked
@@ -195,11 +225,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var magnumOpusTriggered: Boolean = false
     private var magnumOpusFreezeTimer: Float = 0f
 
-    // Archetype Mastery System
-    private var heavyWeightMasteryAchieved: Boolean = false
-
     // Joystick input vector
     var joystickVector: Offset = Offset.Zero
+
+    init {
+        val saveData = saveManager.loadSaveData()
+        _uiState.value = _uiState.value.copy(
+            hasBookmarkRun = saveManager.hasBookmark(),
+            unlockedMapTier = saveData.unlockedMapTier
+        )
+    }
 
     fun setScreen(screen: ScreenState) {
         _uiState.value = _uiState.value.copy(screen = screen)
@@ -211,6 +246,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectCharacter(charDef: CharacterDefinition) {
         _uiState.value = _uiState.value.copy(character = charDef)
+    }
+
+    fun selectMapTier(tier: Int) {
+        if (tier <= _uiState.value.unlockedMapTier) {
+            _uiState.value = _uiState.value.copy(selectedMapTier = tier)
+        }
     }
 
     fun startNewGame() {
@@ -252,6 +293,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         spellRuneDrops.clear()
         blankScrollDrops.clear()
         inkwellVortexes.clear()
+        inkwellStructures.clear()
+        blotterBurstVisuals.clear()
+        theEraserBoss.reset()
+
         magnumOpusVisual.active = false
         magnumOpusVisual.timer = 0f
         washBrushVisuals.clear()
@@ -265,14 +310,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         nextBrokenStoneTime = 90f
         titanSpawned = false
         midBossSpawned = false
+        inkwellSpawned = false
+        enemySpawningHalted = false
+        eraserStarted = false
+        screenShakeTimer = 0f
 
         synthesisManager.reset()
+        masteryManager.reset()
         completedSyntheses.clear()
         pendingTraitSpellId = null
         guaranteedNextItem = null
         magnumOpusTriggered = false
         magnumOpusFreezeTimer = 0f
-        heavyWeightMasteryAchieved = false
         nextElitePackId = 0L
         joystickVector = Offset.Zero
 
@@ -282,6 +331,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             initialSpells.add(ActiveSpell(definition = SpellDefinition.WashBrush, rank = 1))
             initialSpells.add(ActiveSpell(definition = SpellDefinition.SteelFountain, rank = 1))
         }
+
+        val saveData = saveManager.loadSaveData()
 
         _uiState.value = GameUIState(
             screen = ScreenState.PLAYING,
@@ -304,9 +355,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             completedSyntheses = emptyList(),
             heavyWeightCount = 0,
             isHeavyWeightMastered = false,
+            corruptedCount = 0,
+            isCorruptedMastered = false,
+            geometryCount = 0,
+            isGeometryMastered = false,
             titanSpawned = false,
             midBossSpawned = false,
-            isVictory = false
+            inkwellActive = false,
+            eraserActive = false,
+            hasBookmarkRun = saveManager.hasBookmark(),
+            unlockedMapTier = saveData.unlockedMapTier,
+            selectedMapTier = _uiState.value.selectedMapTier,
+            isVictory = false,
+            isMinute61Victory = false
         )
     }
 
@@ -330,10 +391,81 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val currentState = _uiState.value
         val newTime = currentState.timeSurvivedSeconds + clampedDt
 
-        // Check 60-Minute Victory
-        if (newTime >= 3600f && !currentState.isVictory) {
-            finishRun(isVictory = true)
-            return
+        // Camera Screen Shake Decay
+        if (screenShakeTimer > 0f) {
+            screenShakeTimer -= clampedDt
+            if (screenShakeTimer < 0f) screenShakeTimer = 0f
+        }
+
+        // ==========================================
+        // PHASE 5: THE MINUTE 60 CLIMAX (THE ERASURE)
+        // ==========================================
+        // At 59:50 (3590s): Screen shakes, standard enemies dissolve into white ash, The Eraser appears!
+        if (newTime >= 3590f && !eraserStarted) {
+            eraserStarted = true
+            screenShakeTimer = 2.5f
+            soundManager.playReactionBoom()
+            enemies.removeAll { !it.isBoss }
+            theEraserBoss.reset()
+            theEraserBoss.active = true
+            theEraserBoss.timer = 0f
+            enemySpawningHalted = true
+        }
+
+        // The Eraser active 60s battle
+        if (theEraserBoss.active) {
+            theEraserBoss.timer += clampedDt
+            val progress = (theEraserBoss.timer / theEraserBoss.maxDuration).coerceIn(0f, 1f)
+            theEraserBoss.currentSafeRadius = theEraserBoss.initialSafeRadius - progress * (theEraserBoss.initialSafeRadius - theEraserBoss.minSafeRadius)
+
+            // Outside Safe Circle: Rapid Erasure Void damage
+            val distFromCenter = hypot(player.x, player.y)
+            if (distFromCenter > theEraserBoss.currentSafeRadius) {
+                damagePlayer(28f * clampedDt)
+            }
+
+            // Telegraphed Geometric Strikes
+            theEraserBoss.strikeTimer += clampedDt
+            if (theEraserBoss.strikeTimer >= 2.0f) {
+                theEraserBoss.strikeTimer = 0f
+                val angle = Random.nextFloat() * PI.toFloat()
+                val r = theEraserBoss.currentSafeRadius * 0.95f
+                theEraserBoss.telegraphedStrikes.add(
+                    TelegraphedStrike(
+                        id = ++entityIdCounter,
+                        startX = cos(angle) * r,
+                        startY = sin(angle) * r,
+                        endX = -cos(angle) * r,
+                        endY = -sin(angle) * r,
+                        lineWidth = 28f
+                    )
+                )
+            }
+
+            val strikeIter = theEraserBoss.telegraphedStrikes.iterator()
+            while (strikeIter.hasNext()) {
+                val strike = strikeIter.next()
+                strike.timer += clampedDt
+                if (strike.isStriking && !strike.hasDealtDamage) {
+                    strike.hasDealtDamage = true
+                    val dist = distanceToSegment(player.x, player.y, strike.startX, strike.startY, strike.endX, strike.endY)
+                    if (dist < strike.lineWidth) {
+                        damagePlayer(36f)
+                        soundManager.playHit()
+                    }
+                }
+                if (strike.timer >= strike.telegraphDuration + strike.strikeDuration) {
+                    strikeIter.remove()
+                }
+            }
+
+            // Absolute Win Condition: Survive to Minute 61:00 (3660s)
+            if (newTime >= 3660f && !currentState.isVictory) {
+                theEraserBoss.active = false
+                soundManager.playReactionBoom()
+                finishRun(isVictory = true, isMinute61Victory = true)
+                return
+            }
         }
 
         // Magnum Opus freeze & visual timer
@@ -373,7 +505,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // 2. Red Rune Spawner & Collision (Every 2:30)
-        if (newTime >= nextRedRuneTime && redRunes.isEmpty()) {
+        if (newTime >= nextRedRuneTime && redRunes.isEmpty() && !enemySpawningHalted) {
             spawnRedRuneNearPlayer()
             nextRedRuneTime += 150f
         }
@@ -403,7 +535,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // 4. Broken Stone Spawner & Collision
-        if (newTime >= nextBrokenStoneTime && brokenStones.isEmpty()) {
+        if (newTime >= nextBrokenStoneTime && brokenStones.isEmpty() && !enemySpawningHalted) {
             spawnBrokenStoneNearPlayer()
             nextBrokenStoneTime += 150f
         }
@@ -448,6 +580,34 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // ==========================================
+        // PHASE 5: THE MID-RUN CHECKPOINT (THE INKWELL) AT 30:00
+        // ==========================================
+        if (newTime >= 1800f && !inkwellSpawned) {
+            inkwellSpawned = true
+            enemySpawningHalted = true
+            inkwellStructures.add(
+                InkwellStructure(
+                    id = ++entityIdCounter,
+                    x = 0f,
+                    y = 0f
+                )
+            )
+            soundManager.playReactionBoom()
+        }
+
+        val inkwellIter = inkwellStructures.iterator()
+        while (inkwellIter.hasNext()) {
+            val inkwell = inkwellIter.next()
+            inkwell.pulseTimer += clampedDt
+            if (hypot(player.x - inkwell.x, player.y - inkwell.y) < inkwell.radius + 24f) {
+                player.hp = player.maxHp
+                soundManager.playLevelUp()
+                triggerInkwellUI()
+                break
+            }
+        }
+
         // 7. Spell Auto-Casting on Cooldown
         for (spell in currentState.activeSpells) {
             spell.cooldownTimer -= clampedDt
@@ -457,7 +617,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 8. Update Ink Projectiles
+        // 8. Update Ink Projectiles (with Sacred Geometry Bounces)
         val projIterator = inkProjectiles.iterator()
         while (projIterator.hasNext()) {
             val proj = projIterator.next()
@@ -501,12 +661,30 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         enemy.slowRatio = 0.40f
                     }
 
-                    proj.pierceCount--
-                    if (proj.pierceCount <= 0) break
+                    // Sacred Geometry Bounce Logic
+                    if (proj.bounceRemaining > 0) {
+                        proj.bounceRemaining--
+                        proj.damage *= proj.bounceDamageMultiplier
+                        val nextTarget = enemies.firstOrNull { it.id != enemy.id && !proj.hitEnemyIds.contains(it.id) && hypot(it.x - proj.x, it.y - proj.y) < 360f }
+                        if (nextTarget != null) {
+                            val angle = atan2(nextTarget.y - proj.y, nextTarget.x - proj.x)
+                            val speed = hypot(proj.vx, proj.vy)
+                            proj.vx = cos(angle) * speed
+                            proj.vy = sin(angle) * speed
+                            proj.angleRad = angle
+                        } else {
+                            proj.vx = -proj.vx
+                            proj.vy = -proj.vy
+                            proj.angleRad = atan2(proj.vy, proj.vx)
+                        }
+                    } else {
+                        proj.pierceCount--
+                        if (proj.pierceCount <= 0) break
+                    }
                 }
             }
 
-            if (proj.life <= 0f || proj.pierceCount <= 0) {
+            if (proj.life <= 0f || (proj.pierceCount <= 0 && proj.bounceRemaining <= 0)) {
                 projIterator.remove()
             }
         }
@@ -538,6 +716,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // ==========================================
+        // PHASE 5: THE BLOTTER PERFORMANCE SPONGE
+        // ==========================================
+        // If active puddles >= 35 and no Blotter is alive, spawn The Blotter
+        val activePuddleCount = puddlePool.activeCount
+        if (activePuddleCount >= 35 && enemies.none { it.isBlotter } && !theEraserBoss.active) {
+            spawnTheBlotter()
+        }
+
         // 10. Update Inkwell Vortexes (Phase 4 Gravitational Suction)
         val vortexIterator = inkwellVortexes.iterator()
         while (vortexIterator.hasNext()) {
@@ -546,7 +733,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             vortex.angle += 3.5f * clampedDt
             vortex.tickTimer += clampedDt
 
-            // Suction pull & tick damage
             for (enemy in enemies) {
                 val dx = vortex.x - enemy.x
                 val dy = vortex.y - enemy.y
@@ -583,6 +769,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (visual.life <= 0f) arcIterator.remove()
         }
 
+        // 11.1 Update Blotter Burst Visuals
+        val burstIterator = blotterBurstVisuals.iterator()
+        while (burstIterator.hasNext()) {
+            val burst = burstIterator.next()
+            burst.timer += clampedDt
+            if (burst.timer >= burst.maxDuration) burstIterator.remove()
+        }
+
         // 12. 60-Minute Map Scaling (Density over HP)
         // Minute 0 to 30: Linear HP scaling. Minute 30+: Hard cap HP!
         val hpMultiplier = if (newTime <= 1800f) {
@@ -606,7 +800,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         val maxEnemies = if (newTime > 1800f) 150 else 85
         enemySpawnTimer += clampedDt
-        if (enemySpawnTimer >= spawnInterval && enemies.size < maxEnemies) {
+        if (enemySpawnTimer >= spawnInterval && enemies.size < maxEnemies && !enemySpawningHalted && !theEraserBoss.active) {
             enemySpawnTimer = 0f
             if (newTime > 1800f && Random.nextFloat() < 0.65f) {
                 spawnHordeSwarm(hpMultiplier, speedMultiplier)
@@ -637,8 +831,28 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (enemy.slowTimer <= 0f) enemy.slowRatio = 0f
             }
 
-            // Move toward player (freeze during Magnum Opus)
-            if (magnumOpusFreezeTimer <= 0f) {
+            // Pathfinding: The Blotter pathfinds to densest puddle cluster; other enemies chase player
+            if (enemy.isBlotter) {
+                val targetPuddle = puddlePool.pool.filter { it.active }
+                    .minByOrNull { hypot(it.x - enemy.x, it.y - enemy.y) }
+
+                if (targetPuddle != null) {
+                    val dx = targetPuddle.x - enemy.x
+                    val dy = targetPuddle.y - enemy.y
+                    val dist = hypot(dx, dy)
+                    if (dist > 1f) {
+                        enemy.vx = (dx / dist) * enemy.type.speed
+                        enemy.vy = (dy / dist) * enemy.type.speed
+                        enemy.x += enemy.vx * clampedDt
+                        enemy.y += enemy.vy * clampedDt
+                    }
+                    if (dist < enemy.type.radius + targetPuddle.radius * 0.7f) {
+                        targetPuddle.active = false
+                        enemy.absorbedPuddles++
+                        soundManager.playSplatter()
+                    }
+                }
+            } else if (magnumOpusFreezeTimer <= 0f) {
                 val dx = player.x - enemy.x
                 val dy = player.y - enemy.y
                 val dist = hypot(dx, dy)
@@ -678,7 +892,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     player.x += pushX * 2.8f
                     player.y += pushY * 2.8f
 
-                    if (!player.isInvincible && enemy.attackCooldown <= 0f) {
+                    if (!player.isInvincible && enemy.attackCooldown <= 0f && enemy.type.damage > 0f) {
                         enemy.attackCooldown = 0.75f
                         val dmg = enemy.type.damage * (if (enemy.isElite) 1.5f else if (enemy.isBoss) 2.2f else 1.0f)
                         damagePlayer(dmg)
@@ -688,7 +902,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
             // Death handling
             if (enemy.isDead) {
-                if (enemy.type == EnemyType.THE_TITAN) {
+                if (enemy.isBlotter) {
+                    // Blotter burst AOE explosion
+                    val aoeRadius = 220f
+                    val aoeDamage = 350f + enemy.absorbedPuddles * 35f
+                    blotterBurstVisuals.add(
+                        BlotterBurstVisual(
+                            id = ++entityIdCounter,
+                            x = enemy.x,
+                            y = enemy.y,
+                            radius = aoeRadius
+                        )
+                    )
+                    soundManager.playReactionBoom()
+                    screenShakeTimer = 0.5f
+
+                    for (other in enemies) {
+                        if (other.id != enemy.id) {
+                            if (hypot(other.x - enemy.x, other.y - enemy.y) <= aoeRadius) {
+                                damageEnemy(other, aoeDamage)
+                            }
+                        }
+                    }
+                } else if (enemy.type == EnemyType.THE_TITAN) {
                     orbs.add(
                         Orb(
                             id = ++entityIdCounter,
@@ -784,7 +1020,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.value = _uiState.value.copy(
             timeSurvivedSeconds = newTime,
-            redRuneActive = redRunes.isNotEmpty()
+            redRuneActive = redRunes.isNotEmpty(),
+            screenShakeTimer = screenShakeTimer,
+            eraserActive = theEraserBoss.active,
+            eraserSafeRadius = theEraserBoss.currentSafeRadius
         )
     }
 
@@ -792,6 +1031,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val facingDir = player.lastMoveDirection
         val damage = activeSpell.getEffectiveDamage(player.damageMultiplier)
         val hasViscous = activeSpell.hasViscousRune()
+
+        val hasRuler = _uiState.value.equippedArtifacts.any { it.id == ArtifactDefinition.TheFracturedRuler.id }
+        val isGeometryMastered = masteryManager.isSacredGeometryMastered
+        val bounceCount = if (hasRuler) 5 else 0
+        val bounceDelta = if (hasRuler) {
+            if (isGeometryMastered) 1.30f else 0.70f
+        } else 1.0f
 
         when (activeSpell.definition.castType) {
             SpellCastType.DIRECTIONAL_PROJECTILE -> {
@@ -805,7 +1051,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val isUltimate = activeSpell.definition.isUltimate
 
                 if (isUltimate) {
-                    // Magnum Opus: 8-directional cosmic calligraphy strokes!
                     for (i in 0 until 8) {
                         val angle = (i * PI / 4).toFloat()
                         inkProjectiles.add(
@@ -822,7 +1067,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                                 strokeWidth = activeSpell.definition.projectileWidth,
                                 isUltimate = true,
                                 sourceSpellId = activeSpell.definition.id,
-                                hasViscousRune = hasViscous
+                                hasViscousRune = hasViscous,
+                                bounceRemaining = bounceCount,
+                                bounceDamageMultiplier = bounceDelta,
+                                isSacredGeometry = hasRuler,
+                                isGeometryCured = isGeometryMastered
                             )
                         )
                     }
@@ -843,14 +1092,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             isSerratedNib = isSerratedNib,
                             isHarpoon = isHarpoon,
                             sourceSpellId = activeSpell.definition.id,
-                            hasViscousRune = hasViscous
+                            hasViscousRune = hasViscous,
+                            bounceRemaining = bounceCount,
+                            bounceDamageMultiplier = bounceDelta,
+                            isSacredGeometry = hasRuler,
+                            isGeometryCured = isGeometryMastered
                         )
                     )
                 }
             }
 
             SpellCastType.OMNIDIRECTIONAL_BARRAGE -> {
-                // Fountain Barrage: 12-needle radial spray
                 soundManager.playSwoosh()
                 val speed = activeSpell.definition.baseSpeed * character.projectileSpeedMultiplier
                 val count = 12
@@ -870,7 +1122,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             strokeWidth = activeSpell.definition.projectileWidth,
                             isBarrage = true,
                             sourceSpellId = activeSpell.definition.id,
-                            hasViscousRune = hasViscous
+                            hasViscousRune = hasViscous,
+                            bounceRemaining = bounceCount,
+                            bounceDamageMultiplier = bounceDelta,
+                            isSacredGeometry = hasRuler,
+                            isGeometryCured = isGeometryMastered
                         )
                     )
                 }
@@ -880,7 +1136,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 soundManager.playSplatter()
 
                 if (activeSpell.definition.isVortex) {
-                    // Inkwell Vortex spawn
                     inkwellVortexes.add(
                         InkwellVortexEntity(
                             id = ++entityIdCounter,
@@ -913,10 +1168,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         val dy = enemy.y - player.y
                         val dist = hypot(dx, dy)
                         if (dist <= arcRadius + enemy.type.radius) {
-                            val angleToEnemy = atan2(dy, dx)
-                            var angleDiff = abs(angleToEnemy - facingDir)
+                            val enemyAngle = atan2(dy, dx)
+                            var angleDiff = abs(enemyAngle - facingDir)
                             if (angleDiff > PI) angleDiff = (2 * PI - angleDiff).toFloat()
-
                             if (angleDiff <= arcSpan / 2f) {
                                 damageEnemy(enemy, damage)
                                 if (hasViscous) {
@@ -927,24 +1181,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
 
-                    val puddleX = player.x + cos(facingDir) * (arcRadius * 0.55f)
-                    val puddleY = player.y + sin(facingDir) * (arcRadius * 0.55f)
-                    val isDeepWell = activeSpell.hasTrait(SpellTraitType.DEEP_WELL.id)
-
-                    val puddle = puddlePool.obtain(
-                        x = puddleX,
-                        y = puddleY,
-                        radius = if (isWideBristle) 80f else 60f,
-                        damage = damage * 0.35f,
-                        maxLife = if (isDeepWell) 6.0f else 4.0f,
-                        tickInterval = if (isDeepWell) 0.35f else 0.5f,
+                    // Leave 2D pooled ink puddle decal
+                    val puddleRadius = if (activeSpell.hasTrait(SpellTraitType.DEEP_WELL.id)) 48f else 36f
+                    val puddleDmg = damage * 0.40f
+                    val puddleMaxLife = if (activeSpell.hasTrait(SpellTraitType.DEEP_WELL.id)) 6.0f else 4.0f
+                    puddlePool.obtain(
+                        x = player.x + cos(facingDir) * (arcRadius * 0.5f),
+                        y = player.y + sin(facingDir) * (arcRadius * 0.5f),
+                        radius = puddleRadius,
+                        damage = puddleDmg,
+                        maxLife = puddleMaxLife,
                         sourceSpellId = activeSpell.definition.id,
                         hasViscousRune = hasViscous
                     )
-
-                    for (trait in activeSpell.traitModules) {
-                        trait.onPuddleSpawn(puddle)
-                    }
                 }
             }
         }
@@ -1034,6 +1283,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun spawnTheBlotter() {
+        val angle = Random.nextFloat() * 2 * PI.toFloat()
+        val ex = player.x + cos(angle) * 480f
+        val ey = player.y + sin(angle) * 480f
+
+        enemies.add(
+            Enemy(
+                id = ++entityIdCounter,
+                type = EnemyType.THE_BLOTTER,
+                x = ex,
+                y = ey,
+                hp = EnemyType.THE_BLOTTER.baseHp,
+                maxHp = EnemyType.THE_BLOTTER.baseHp,
+                isBlotter = true
+            )
+        )
+        soundManager.playReactionBoom()
+    }
+
     private fun spawnRedRuneNearPlayer() {
         val angle = Random.nextFloat() * 2 * PI.toFloat()
         val dist = 220f + Random.nextFloat() * 60f
@@ -1105,12 +1373,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun triggerBrokenStoneUI(stone: BrokenStoneEntity) {
         val choices = ArtifactDefinition.StoneList.shuffled().take(3)
-        val heavyWeightCount = _uiState.value.equippedArtifacts.count { it.archetypeTag == ArtifactDefinition.ARCHETYPE_HEAVY_WEIGHT }
         _uiState.value = _uiState.value.copy(
             screen = ScreenState.BROKEN_STONE,
             brokenStoneChoices = choices,
-            heavyWeightCount = heavyWeightCount,
-            isHeavyWeightMastered = heavyWeightMasteryAchieved
+            heavyWeightCount = masteryManager.heavyWeightCount,
+            isHeavyWeightMastered = masteryManager.isHeavyWeightMastered
         )
     }
 
@@ -1130,30 +1397,252 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(screen = ScreenState.PLAYING)
     }
 
-    private fun equipArtifact(artifact: ArtifactDefinition) {
-        val currentArtifacts = _uiState.value.equippedArtifacts.toMutableList()
-        currentArtifacts.add(artifact)
+    // ==========================================
+    // PHASE 5: THE INKWELL CHECKPOINT HANDLERS
+    // ==========================================
+    private fun triggerInkwellUI() {
+        val choices = (ArtifactDefinition.ObeliskList + ArtifactDefinition.StoneList).shuffled().take(3)
+        _uiState.value = _uiState.value.copy(
+            screen = ScreenState.INKWELL_CHECKPOINT,
+            inkwellActive = true,
+            inkwellShopChoices = choices
+        )
+    }
 
-        val heavyWeightCount = currentArtifacts.count { it.archetypeTag == ArtifactDefinition.ARCHETYPE_HEAVY_WEIGHT }
-        if (heavyWeightCount >= 4 && !heavyWeightMasteryAchieved) {
-            heavyWeightMasteryAchieved = true
-            soundManager.playReactionBoom()
+    fun purchaseInkwellArtifact(artifact: ArtifactDefinition) {
+        if (player.xp < 20) return
+        player.xp -= 20
+        equipArtifact(artifact)
+        val remaining = _uiState.value.inkwellShopChoices.filter { it.id != artifact.id }
+        _uiState.value = _uiState.value.copy(inkwellShopChoices = remaining)
+    }
 
-            for (i in 0 until currentArtifacts.size) {
-                val art = currentArtifacts[i]
-                if (art.id == ArtifactDefinition.TheIronVats.id) {
-                    currentArtifacts[i] = art.copy(
-                        moveSpeedModifier = 0.60f,
-                        isMasteryCured = true
-                    )
+    fun restAndResumeFromInkwell() {
+        inkwellStructures.clear()
+        enemySpawningHalted = false
+        _uiState.value = _uiState.value.copy(
+            screen = ScreenState.PLAYING,
+            inkwellActive = false
+        )
+        // Spawn Minute 31 horde swarms immediately!
+        val hpMult = 4.5f
+        val speedMult = 1.05f
+        for (i in 0 until 4) {
+            spawnHordeSwarm(hpMult, speedMult)
+        }
+        soundManager.playReactionBoom()
+    }
+
+    fun bookmarkRunAndExit() {
+        val st = _uiState.value
+        val spellsData = st.activeSpells.joinToString("|") {
+            "${it.definition.id}:${it.rank}:${it.traitModules.joinToString(",") { m -> m.id }}:${it.socketedRunes.joinToString(",") { r -> r.name }}"
+        }
+        val gearData = st.equippedGear.joinToString("|") { "${it.type.name}:${it.stacks}" }
+        val artifactsData = st.equippedArtifacts.joinToString("|") { it.id }
+        val synthesesData = completedSyntheses.joinToString("|")
+
+        val state = BookmarkRunState(
+            characterId = st.character.id,
+            classId = st.playerClass.id,
+            timeSurvivedSeconds = st.timeSurvivedSeconds,
+            score = st.score,
+            kills = st.kills,
+            damageDealt = st.damageDealt,
+            playerHp = player.hp,
+            playerMaxHp = player.maxHp,
+            playerLevel = player.level,
+            playerXp = player.xp,
+            playerXpNeeded = player.xpNeeded,
+            activeSpellsData = spellsData,
+            equippedGearData = gearData,
+            equippedArtifactsData = artifactsData,
+            completedSynthesesData = synthesesData,
+            slot1Unlocked = synthesisManager.slot1Unlocked,
+            slot2Unlocked = synthesisManager.slot2Unlocked,
+            slot3Unlocked = synthesisManager.slot3Unlocked,
+            heavyWeightCount = masteryManager.heavyWeightCount,
+            isHeavyWeightMastered = masteryManager.isHeavyWeightMastered,
+            corruptedCount = masteryManager.corruptedMediumCount,
+            isCorruptedMastered = masteryManager.isCorruptedMediumMastered,
+            geometryCount = masteryManager.sacredGeometryCount,
+            isGeometryMastered = masteryManager.isSacredGeometryMastered
+        )
+
+        saveManager.saveBookmark(state)
+        _uiState.value = _uiState.value.copy(
+            screen = ScreenState.MAIN_MENU,
+            hasBookmarkRun = true
+        )
+    }
+
+    fun resumeBookmarkedRun() {
+        val state = saveManager.loadAndConsumeBookmark() ?: return
+        val charDef = CharacterDefinition.allCharacters.find { it.id == state.characterId } ?: CharacterDefinition.TheCalligrapher
+        val classDef = ClassDefinition.allClasses.find { it.id == state.classId } ?: ClassDefinition.Scribe
+
+        // Reconstitute active spells
+        val restoredSpells = mutableListOf<ActiveSpell>()
+        if (state.activeSpellsData.isNotBlank()) {
+            val spellParts = state.activeSpellsData.split("|")
+            for (p in spellParts) {
+                val tokens = p.split(":")
+                if (tokens.isNotEmpty()) {
+                    val sId = tokens[0]
+                    val sRank = tokens.getOrNull(1)?.toIntOrNull() ?: 1
+                    val sDef = SpellDefinition.allSpells.find { it.id == sId } ?: SpellDefinition.QuillDart
+                    val sTraits = mutableListOf<SpellTraitModule>()
+                    if (tokens.size > 2 && tokens[2].isNotBlank()) {
+                        val traitIds = tokens[2].split(",")
+                        for (tid in traitIds) {
+                            when (tid) {
+                                "serrated_nib" -> sTraits.add(SerratedNibTrait)
+                                "flex_nib" -> sTraits.add(FlexNibTrait)
+                                "wide_bristle" -> sTraits.add(WideBristleTrait)
+                                "deep_well" -> sTraits.add(DeepWellTrait)
+                                "razor_flow" -> sTraits.add(RazorFlowTrait)
+                                "pressurized_ink" -> sTraits.add(PressurizedInkTrait)
+                            }
+                        }
+                    }
+                    val sRunes = mutableListOf<SpellRuneType>()
+                    if (tokens.size > 3 && tokens[3].isNotBlank()) {
+                        val runeNames = tokens[3].split(",")
+                        for (rName in runeNames) {
+                            try {
+                                sRunes.add(SpellRuneType.valueOf(rName))
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    restoredSpells.add(ActiveSpell(definition = sDef, rank = sRank, traitModules = sTraits, socketedRunes = sRunes))
+                }
+            }
+        }
+        if (restoredSpells.isEmpty()) {
+            restoredSpells.add(ActiveSpell(classDef.starterSpell, 1))
+        }
+
+        // Reconstitute gear
+        val restoredGear = mutableListOf<EquippedGear>()
+        if (state.equippedGearData.isNotBlank()) {
+            val gearParts = state.equippedGearData.split("|")
+            for (gp in gearParts) {
+                val tokens = gp.split(":")
+                if (tokens.size == 2) {
+                    try {
+                        val gType = GearType.valueOf(tokens[0])
+                        val gStacks = tokens[1].toIntOrNull() ?: 1
+                        restoredGear.add(EquippedGear(gType, gStacks))
+                    } catch (_: Exception) {}
                 }
             }
         }
 
+        // Reconstitute artifacts
+        val restoredArtifacts = mutableListOf<ArtifactDefinition>()
+        if (state.equippedArtifactsData.isNotBlank()) {
+            val artIds = state.equippedArtifactsData.split("|")
+            val allArtifacts = ArtifactDefinition.ObeliskList + ArtifactDefinition.StoneList
+            for (aid in artIds) {
+                val found = allArtifacts.find { it.id == aid }
+                if (found != null) restoredArtifacts.add(found)
+            }
+        }
+
+        completedSyntheses.clear()
+        if (state.completedSynthesesData.isNotBlank()) {
+            completedSyntheses.addAll(state.completedSynthesesData.split("|"))
+        }
+
+        synthesisManager.reset()
+        if (state.slot1Unlocked) synthesisManager.onLevelReached(35)
+        if (state.slot2Unlocked) synthesisManager.onLevelReached(60)
+        if (state.slot3Unlocked) synthesisManager.onLevelReached(95)
+
+        masteryManager.restore(
+            heavyCount = state.heavyWeightCount,
+            heavyMastered = state.isHeavyWeightMastered,
+            corruptedCount = state.corruptedCount,
+            corruptedMastered = state.isCorruptedMastered,
+            geometryCount = state.geometryCount,
+            geometryMastered = state.isGeometryMastered
+        )
+        masteryManager.evaluateArtifacts(restoredArtifacts)
+
+        // Clear simulation state
+        enemies.clear()
+        inkProjectiles.clear()
+        puddlePool.clear()
+        redRunes.clear()
+        obelisks.clear()
+        brokenStones.clear()
+        spellRuneDrops.clear()
+        blankScrollDrops.clear()
+        inkwellVortexes.clear()
+        inkwellStructures.clear()
+        theEraserBoss.reset()
+        enemySpawningHalted = false
+        inkwellSpawned = true
+        titanSpawned = true
+        midBossSpawned = true
+
+        player.x = 0f
+        player.y = 0f
+        player.vx = 0f
+        player.vy = 0f
+        player.level = state.playerLevel
+        player.xp = state.playerXp
+        player.xpNeeded = state.playerXpNeeded
+        player.hp = state.playerHp
+        player.maxHp = state.playerMaxHp
+
+        _uiState.value = GameUIState(
+            screen = ScreenState.PLAYING,
+            timeSurvivedSeconds = state.timeSurvivedSeconds,
+            score = state.score,
+            kills = state.kills,
+            damageDealt = state.damageDealt,
+            character = charDef,
+            playerClass = classDef,
+            activeSpells = restoredSpells,
+            equippedGear = restoredGear,
+            equippedArtifacts = restoredArtifacts,
+            completedSyntheses = completedSyntheses.toList(),
+            slot1Unlocked = synthesisManager.slot1Unlocked,
+            slot2Unlocked = synthesisManager.slot2Unlocked,
+            slot3Unlocked = synthesisManager.slot3Unlocked,
+            heavyWeightCount = masteryManager.heavyWeightCount,
+            isHeavyWeightMastered = masteryManager.isHeavyWeightMastered,
+            corruptedCount = masteryManager.corruptedMediumCount,
+            isCorruptedMastered = masteryManager.isCorruptedMediumMastered,
+            geometryCount = masteryManager.sacredGeometryCount,
+            isGeometryMastered = masteryManager.isSacredGeometryMastered,
+            hasBookmarkRun = false,
+            titanSpawned = true,
+            midBossSpawned = true
+        )
+
+        recalculatePlayerStats()
+        soundManager.playLevelUp()
+    }
+
+    private fun equipArtifact(artifact: ArtifactDefinition) {
+        val currentArtifacts = _uiState.value.equippedArtifacts.toMutableList()
+        currentArtifacts.add(artifact)
+
+        val result = masteryManager.evaluateArtifacts(currentArtifacts)
+        if (result.newMasteriesUnlocked.isNotEmpty()) {
+            soundManager.playReactionBoom()
+        }
+
         _uiState.value = _uiState.value.copy(
             equippedArtifacts = currentArtifacts,
-            heavyWeightCount = heavyWeightCount,
-            isHeavyWeightMastered = heavyWeightMasteryAchieved
+            heavyWeightCount = result.heavyWeightCount,
+            isHeavyWeightMastered = result.isHeavyWeightMastered,
+            corruptedCount = result.corruptedMediumCount,
+            isCorruptedMastered = result.isCorruptedMediumMastered,
+            geometryCount = result.sacredGeometryCount,
+            isGeometryMastered = result.isSacredGeometryMastered
         )
 
         recalculatePlayerStats()
@@ -1168,6 +1657,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var totalSpeedMult = 1.0f
         var totalArmor = 0f
         var totalAttackSpeed = 1.0f
+        var maxHpMult = 1.0f
 
         for (g in _uiState.value.equippedGear) {
             when (g.type) {
@@ -1185,12 +1675,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             totalSpeedMult += art.moveSpeedModifier
             totalArmor += art.armorModifier
             totalAttackSpeed += art.attackSpeedModifier
+            maxHpMult += art.maxHpMultiplier
         }
 
         player.damageMultiplier = totalDmgMult.coerceAtLeast(0.1f)
         player.moveSpeed = ((player.baseMoveSpeed + totalSpeedAdd) * totalSpeedMult).coerceAtLeast(40f)
         player.armor = totalArmor
         player.attackSpeedMultiplier = totalAttackSpeed.coerceAtLeast(0.2f)
+        player.maxHp = (100f * maxHpMult).coerceAtLeast(20f)
+        player.hp = player.hp.coerceAtMost(player.maxHp)
     }
 
     private fun spawnSpellRuneDrop(x: Float, y: Float, runeType: SpellRuneType) {
@@ -1243,9 +1736,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun damageEnemy(enemy: Enemy, damage: Float, isBleed: Boolean = false) {
         if (enemy.isDead) return
-        enemy.hp -= damage
+        var finalDmg = damage
+        if (isBleed) {
+            val poisonBonus = _uiState.value.equippedArtifacts.sumOf { it.poisonDamageMultiplier.toDouble() }.toFloat()
+            finalDmg *= (1.0f + poisonBonus)
+        }
+        enemy.hp -= finalDmg
         enemy.flashTimer = 0.12f
-        _uiState.value = _uiState.value.copy(damageDealt = _uiState.value.damageDealt + damage.toLong())
+        _uiState.value = _uiState.value.copy(damageDealt = _uiState.value.damageDealt + finalDmg.toLong())
+
+        // Phase 5 Corrupted Medium Mastery: Vampirism heals player on bleed/poison DoT ticks
+        if (isBleed && (masteryManager.isCorruptedMediumMastered || _uiState.value.equippedArtifacts.any { it.hasVampirism })) {
+            val healAmount = (finalDmg * 0.25f).coerceAtLeast(1f)
+            player.hp = (player.hp + healAmount).coerceAtMost(player.maxHp)
+        }
 
         if (!isBleed) {
             soundManager.playHit()
@@ -1256,7 +1760,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 id = ++entityIdCounter,
                 x = enemy.x + Random.nextFloat() * 16f - 8f,
                 y = enemy.y - 18f,
-                text = "${damage.toInt()}",
+                text = "${finalDmg.toInt()}",
                 color = if (isBleed) Color(0xFFD32F2F) else Color.Black
             )
         )
@@ -1273,6 +1777,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             player.hp = 0f
             finishRun(isVictory = false)
         }
+    }
+
+    private fun distanceToSegment(px: Float, py: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {
+        val dx = x2 - x1
+        val dy = y2 - y1
+        val lenSq = dx * dx + dy * dy
+        if (lenSq < 0.001f) return hypot(px - x1, py - y1)
+        val t = (((px - x1) * dx + (py - y1) * dy) / lenSq).coerceIn(0f, 1f)
+        val projX = x1 + t * dx
+        val projY = y1 + t * dy
+        return hypot(px - projX, py - projY)
     }
 
     private fun collectOrb(orb: Orb) {
@@ -1555,11 +2070,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         recalculatePlayerStats()
     }
 
-    private fun finishRun(isVictory: Boolean) {
+    private fun finishRun(isVictory: Boolean, isMinute61Victory: Boolean = false) {
         val st = _uiState.value
         val payout = saveManager.recordRunPayout(
             kills = st.kills,
-            survivalSeconds = st.timeSurvivedSeconds.toInt()
+            survivalSeconds = st.timeSurvivedSeconds.toInt(),
+            isMinute61Victory = isMinute61Victory
         )
         val goldEarned = payout.first
         val crystalsEarned = payout.second
@@ -1569,7 +2085,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             screen = ScreenState.GAME_OVER,
             goldEarnedThisRun = goldEarned,
             crystalsEarnedThisRun = crystalsEarned,
-            isVictory = isVictory
+            isVictory = isVictory,
+            isMinute61Victory = isMinute61Victory,
+            unlockedMapTier = saveManager.loadSaveData().unlockedMapTier
         )
 
         val run = RunRecordEntity(
@@ -1577,7 +2095,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             survivalTimeSeconds = st.timeSurvivedSeconds.toInt(),
             kills = st.kills,
             damageDealt = st.damageDealt,
-            primaryColor = "Stark Black",
+            primaryColor = if (isMinute61Victory) "Divine Gold" else "Stark Black",
             toolName = "${st.playerClass.name} ($primarySpell)",
             levelReached = player.level,
             isVictory = isVictory

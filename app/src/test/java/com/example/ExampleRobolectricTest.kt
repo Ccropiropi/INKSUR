@@ -236,4 +236,213 @@ class ExampleRobolectricTest {
         assertTrue(condensedOrb.isCondensed)
         assertEquals(50, condensedOrb.value)
     }
+
+    // ==========================================
+    // PHASE 5 SPECIFICATION TESTS
+    // ==========================================
+
+    @Test
+    fun `verify Phase 5 - Mid-Run Bookmark save and consume round-trip`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val saveManager = com.example.data.SaveManager(context)
+
+        val bookmark = com.example.data.BookmarkRunState(
+            characterId = "calligrapher",
+            classId = "scribe",
+            timeSurvivedSeconds = 1800f,
+            score = 12500,
+            kills = 380,
+            damageDealt = 45000L,
+            playerHp = 100f,
+            playerMaxHp = 100f,
+            playerLevel = 42,
+            playerXp = 25,
+            playerXpNeeded = 80,
+            activeSpellsData = "quill_dart:7:flex_nib,serrated_nib:VISCOUS_RUNE",
+            equippedGearData = "HEAVY_VELLUM:3|ERGONOMIC_GRIP:2",
+            equippedArtifactsData = "iron_vats|toxic_pigment",
+            completedSynthesesData = "harpoon",
+            slot1Unlocked = true,
+            slot2Unlocked = false,
+            slot3Unlocked = false,
+            heavyWeightCount = 1,
+            isHeavyWeightMastered = false,
+            corruptedCount = 1,
+            isCorruptedMastered = false,
+            geometryCount = 0,
+            isGeometryMastered = false
+        )
+
+        // 1. Save bookmark
+        val saved = saveManager.saveBookmark(bookmark)
+        assertTrue("Bookmark must be saved successfully", saved)
+        assertTrue("hasBookmark must report true", saveManager.hasBookmark())
+
+        // 2. Load and consume bookmark
+        val restored = saveManager.loadAndConsumeBookmark()
+        assertNotNull("Restored bookmark must not be null", restored)
+        assertEquals("calligrapher", restored!!.characterId)
+        assertEquals("scribe", restored.classId)
+        assertEquals(1800f, restored.timeSurvivedSeconds, 0.01f)
+        assertEquals(42, restored.playerLevel)
+        assertEquals(380, restored.kills)
+        assertTrue(restored.slot1Unlocked)
+        assertFalse(restored.slot2Unlocked)
+
+        // 3. Anti-save-scumming verification: Bookmark file must be deleted upon consumption
+        assertFalse("Bookmark file must be consumed and deleted immediately", saveManager.hasBookmark())
+        val secondLoad = saveManager.loadAndConsumeBookmark()
+        assertEquals("Second load must return null", null, secondLoad)
+    }
+
+    @Test
+    fun `verify Phase 5 - The Blotter sponge mechanics and death AOE burst`() {
+        val blotter = Enemy(
+            id = 55L,
+            type = EnemyType.THE_BLOTTER,
+            x = 100f,
+            y = 100f,
+            hp = EnemyType.THE_BLOTTER.baseHp,
+            maxHp = EnemyType.THE_BLOTTER.baseHp,
+            isBlotter = true
+        )
+
+        assertTrue(blotter.isBlotter)
+        assertEquals(450f, blotter.maxHp, 0.1f)
+        assertEquals(55f, blotter.type.speed, 0.1f)
+
+        // Sponge absorbs persistent puddles
+        val pool = InkPuddlePool(10)
+        val p1 = pool.obtain(105f, 105f, 50f, 10f, 4f, 0.5f, "wash_brush")
+        val p2 = pool.obtain(110f, 110f, 50f, 10f, 4f, 0.5f, "wash_brush")
+        assertTrue(p1.active)
+        assertTrue(p2.active)
+
+        // Absorb puddles
+        blotter.absorbedPuddles += 2
+        p1.active = false
+        p2.active = false
+
+        assertEquals(2, blotter.absorbedPuddles)
+        assertFalse(p1.active)
+        assertFalse(p2.active)
+
+        // Death AOE damage calculation: base 350f + absorbed * 35f
+        val aoeRadius = 220f
+        val aoeDamage = 350f + blotter.absorbedPuddles * 35f
+        assertEquals(420f, aoeDamage, 0.01f)
+        assertTrue(aoeRadius > 200f)
+    }
+
+    @Test
+    fun `verify Phase 5 - Archetype 2 Corrupted Medium and Vampirism cure`() {
+        val toxicPigment = com.example.model.ArtifactDefinition.ToxicPigment
+        assertEquals(com.example.model.ArtifactTier.CURSED, toxicPigment.tier)
+        assertEquals(com.example.model.ArtifactDefinition.ARCHETYPE_CORRUPTED_MEDIUM, toxicPigment.archetypeTag)
+        assertEquals(2.0f, toxicPigment.poisonDamageMultiplier, 0.01f) // +200% DoT
+        assertEquals(-0.50f, toxicPigment.maxHpModifier, 0.01f) // -50% Max HP debuff
+
+        val masteryManager = com.example.game.MasteryManager()
+        val inventory = mutableListOf(
+            toxicPigment,
+            com.example.model.ArtifactDefinition.SpoiledInk,
+            com.example.model.ArtifactDefinition.FungalPaper,
+            com.example.model.ArtifactDefinition.BlightedQuill
+        )
+
+        val result = masteryManager.evaluateArtifacts(inventory)
+        assertEquals(4, result.corruptedMediumCount)
+        assertTrue("Corrupted Medium must be mastered", result.isCorruptedMediumMastered)
+        assertTrue("New mastery unlocked must contain Corrupted Medium", result.newMasteriesUnlocked.contains(com.example.model.ArtifactDefinition.ARCHETYPE_CORRUPTED_MEDIUM))
+
+        // Cured Toxic Pigment grants Vampirism and removes Max HP penalty
+        val curedPigment = inventory.first { it.id == toxicPigment.id }
+        assertTrue(curedPigment.isMasteryCured)
+        assertTrue(curedPigment.hasVampirism)
+        assertEquals(0.0f, curedPigment.maxHpModifier, 0.01f)
+        assertEquals(2.0f, curedPigment.poisonDamageMultiplier, 0.01f)
+    }
+
+    @Test
+    fun `verify Phase 5 - Archetype 3 Sacred Geometry and bounce amplification cure`() {
+        val ruler = com.example.model.ArtifactDefinition.TheFracturedRuler
+        assertEquals(com.example.model.ArtifactTier.CURSED, ruler.tier)
+        assertEquals(com.example.model.ArtifactDefinition.ARCHETYPE_SACRED_GEOMETRY, ruler.archetypeTag)
+        assertEquals(5, ruler.bonusBounces)
+        assertEquals(-0.30f, ruler.bounceDamageDelta, 0.01f) // -30% damage per bounce
+
+        val masteryManager = com.example.game.MasteryManager()
+        val inventory = mutableListOf(
+            ruler,
+            com.example.model.ArtifactDefinition.BrassCompass,
+            com.example.model.ArtifactDefinition.GraphPaper,
+            com.example.model.ArtifactDefinition.ProtractorPlate
+        )
+
+        val result = masteryManager.evaluateArtifacts(inventory)
+        assertEquals(4, result.sacredGeometryCount)
+        assertTrue("Sacred Geometry must be mastered", result.isSacredGeometryMastered)
+
+        // Cured Fractured Ruler flips -30% damage per bounce to +30% damage per bounce!
+        val curedRuler = inventory.first { it.id == ruler.id }
+        assertTrue(curedRuler.isMasteryCured)
+        assertEquals(0.30f, curedRuler.bounceDamageDelta, 0.01f)
+        assertEquals(5, curedRuler.bonusBounces)
+    }
+
+    @Test
+    fun `verify Phase 5 - The Eraser safe zone shrinkage and Minute 61 2x payout victory`() {
+        val boss = com.example.model.TheEraserBoss()
+        boss.active = true
+        boss.timer = 0f
+        boss.currentSafeRadius = boss.initialSafeRadius
+        assertEquals(600f, boss.currentSafeRadius, 0.01f)
+
+        // Simulate 30s elapsed (halfway through the 60s climax)
+        boss.timer = 30f
+        val progress = (boss.timer / boss.maxDuration).coerceIn(0f, 1f)
+        boss.currentSafeRadius = boss.initialSafeRadius - progress * (boss.initialSafeRadius - boss.minSafeRadius)
+        // 600 - 0.5 * (600 - 170) = 600 - 215 = 385f
+        assertEquals(385f, boss.currentSafeRadius, 0.01f)
+
+        // At 60s elapsed
+        boss.timer = 60f
+        val finalProgress = (boss.timer / boss.maxDuration).coerceIn(0f, 1f)
+        boss.currentSafeRadius = boss.initialSafeRadius - finalProgress * (boss.initialSafeRadius - boss.minSafeRadius)
+        assertEquals(170f, boss.currentSafeRadius, 0.01f)
+
+        // Telegraphed Strike timing
+        val strike = com.example.model.TelegraphedStrike(
+            id = 1L,
+            startX = -150f,
+            startY = 0f,
+            endX = 150f,
+            endY = 0f
+        )
+        assertFalse(strike.isStriking)
+        strike.timer = 1.25f
+        assertTrue(strike.isStriking)
+
+        // Post-run 2x Climax payout verification and Map Tier 2 unlock
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val saveManager = com.example.data.SaveManager(context)
+        val kills = 500
+        val survivalSeconds = 3660 // Minute 61:00
+
+        val payout = saveManager.recordRunPayout(
+            kills = kills,
+            survivalSeconds = survivalSeconds,
+            isMinute61Victory = true
+        )
+
+        // Normal gold = 500, with 2x = 1000
+        assertEquals(1000, payout.first)
+        // Normal crystals = 61 * 10 = 610, with 2x = 1220
+        assertEquals(1220, payout.second)
+
+        // Map Tier 2 must be unlocked!
+        val savedData = saveManager.loadSaveData()
+        assertEquals(2, savedData.unlockedMapTier)
+    }
 }
+

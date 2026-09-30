@@ -7,10 +7,10 @@ data class InkProjectile(
     val id: Long,
     var x: Float,
     var y: Float,
-    val vx: Float,
-    val vy: Float,
-    val angleRad: Float,
-    val damage: Float,
+    var vx: Float,
+    var vy: Float,
+    var angleRad: Float,
+    var damage: Float,
     var pierceCount: Int,
     var life: Float = 1.8f,
     var strokeWidth: Float = 12f,
@@ -21,7 +21,12 @@ data class InkProjectile(
     val isBarrage: Boolean = false,
     val isUltimate: Boolean = false,
     val sourceSpellId: String = "quill_dart",
-    val hasViscousRune: Boolean = false
+    val hasViscousRune: Boolean = false,
+    // Phase 5 Sacred Geometry Bounce Mechanics
+    var bounceRemaining: Int = 0,
+    var bounceDamageMultiplier: Float = 1.0f,
+    var isSacredGeometry: Boolean = false,
+    var isGeometryCured: Boolean = false
 ) {
     val hitEnemyIds: MutableSet<Long> = mutableSetOf()
 }
@@ -47,6 +52,9 @@ data class InkPuddle(
 class InkPuddlePool(private val capacity: Int = 200) {
     val pool: Array<InkPuddle> = Array(capacity) { InkPuddle() }
     private var idSequence: Long = 0L
+
+    val activeCount: Int
+        get() = pool.count { it.active }
 
     fun obtain(
         x: Float,
@@ -202,3 +210,62 @@ data class DamageNumber(
     var life: Float = 0.8f,
     var vy: Float = -40f
 )
+
+// ==========================================
+// PHASE 5 ENTITIES
+// ==========================================
+
+// 1. The Mid-Run Checkpoint (The Inkwell) at Minute 30:00
+data class InkwellStructure(
+    val id: Long,
+    var x: Float = 0f,
+    var y: Float = 0f,
+    val radius: Float = 42f,
+    var pulseTimer: Float = 0f
+)
+
+// 2. The Blotter Burst AOE Visual
+data class BlotterBurstVisual(
+    val id: Long,
+    val x: Float,
+    val y: Float,
+    val radius: Float = 180f,
+    var timer: Float = 0f,
+    val maxDuration: Float = 0.5f
+)
+
+// 3. The Minute 60 Climax: The Eraser Boss & Telegraphed Geometric Strikes
+data class TelegraphedStrike(
+    val id: Long,
+    val startX: Float,
+    val startY: Float,
+    val endX: Float,
+    val endY: Float,
+    val lineWidth: Float = 26f,
+    var timer: Float = 0f,
+    val telegraphDuration: Float = 1.2f,
+    val strikeDuration: Float = 0.4f,
+    var hasDealtDamage: Boolean = false,
+    var isFinished: Boolean = false
+) {
+    val isStriking: Boolean get() = timer >= telegraphDuration && !isFinished
+}
+
+data class TheEraserBoss(
+    var active: Boolean = false,
+    var timer: Float = 0f,
+    val maxDuration: Float = 60.0f,
+    var currentSafeRadius: Float = 600f,
+    val initialSafeRadius: Float = 600f,
+    val minSafeRadius: Float = 170f,
+    var strikeTimer: Float = 0f,
+    val telegraphedStrikes: MutableList<TelegraphedStrike> = mutableListOf()
+) {
+    fun reset() {
+        active = false
+        timer = 0f
+        currentSafeRadius = initialSafeRadius
+        strikeTimer = 0f
+        telegraphedStrikes.clear()
+    }
+}

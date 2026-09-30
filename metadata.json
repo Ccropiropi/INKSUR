@@ -1,6 +1,1 @@
-{
-  "name": "Ink Survivor",
-  "description": "An ink-based bullet-heaven survival game with fluid dynamics, calligraphic weapons, elemental palette evolutions, and high-contrast sumi-e combat against paper horrors.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
+{"name":"Ink Survivor","description":"An ink-based bullet-heaven survival game with fluid dynamics, calligraphic weapons, elemental palette evolutions, and high-contrast sumi-e combat against paper horrors.","requestFramePermissions":[],"majorCapabilities":["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]}
