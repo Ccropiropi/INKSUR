@@ -26,6 +26,8 @@ data class ArtifactDefinition(
     var isMasteryCured: Boolean = false,
     var hasVampirism: Boolean = false
 ) {
+    val maxHpModifier: Float get() = maxHpMultiplier
+    val bonusBounces: Int get() = projectileBounces
     companion object {
         const val ARCHETYPE_HEAVY_WEIGHT = "Heavy Weight"
         const val ARCHETYPE_CORRUPTED_MEDIUM = "Corrupted Medium"

@@ -111,6 +111,22 @@ fun BrokenStoneDialog(
                     }
                 }
 
+                // Critical note about one-time shop visit
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFFFF3E0), RoundedCornerShape(8.dp))
+                        .border(1.5.dp, Color(0xFFE65100), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                ) {
+                    Text(
+                        text = "⚠ NOTE: When you press EXIT, this shop will close and will NOT open again!",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFBF360C)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Mastery tracking progress banner
@@ -207,6 +223,21 @@ fun BrokenStoneDialog(
                     if (index < artifacts.size - 1) {
                         Spacer(modifier = Modifier.height(8.dp))
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("exit_shop_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF212121)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "EXIT SHOP (WILL NOT REOPEN)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }

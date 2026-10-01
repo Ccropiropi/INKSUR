@@ -211,6 +211,31 @@ data class DamageNumber(
     var vy: Float = -40f
 )
 
+// Orbital Runes revolving around player
+data class OrbitalRuneEntity(
+    val id: Long,
+    var orbitAngle: Float = 0f,
+    var orbitRadius: Float = 95f,
+    var damage: Float = 28f,
+    var hitCooldownTimer: Float = 0f,
+    var hasViscous: Boolean = false
+)
+
+// Cinnabar Seal detonation glyph
+data class CinnabarSealEntity(
+    val id: Long,
+    val x: Float,
+    val y: Float,
+    val radius: Float = 110f,
+    val damage: Float = 80f,
+    var timer: Float = 0f,
+    val fuseTime: Float = 0.85f,
+    var detonated: Boolean = false,
+    var blastTimer: Float = 0f,
+    val blastDuration: Float = 0.35f,
+    var hasViscous: Boolean = false
+)
+
 // ==========================================
 // PHASE 5 ENTITIES
 // ==========================================

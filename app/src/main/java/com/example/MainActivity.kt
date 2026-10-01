@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.game.GameViewModel
 import com.example.game.ScreenState
+import com.example.model.ActiveSpell
 import com.example.model.GearType
 import com.example.model.SpellDefinition
 import com.example.ui.BattleScreen
@@ -84,6 +85,7 @@ fun InkSurvivorApp(viewModel: GameViewModel = viewModel()) {
             ScreenState.OBELISK,
             ScreenState.BROKEN_STONE,
             ScreenState.BLANK_SCROLL,
+            ScreenState.INKWELL_CHECKPOINT,
             ScreenState.GAME_OVER -> {
                 BattleScreen(
                     viewModel = viewModel,

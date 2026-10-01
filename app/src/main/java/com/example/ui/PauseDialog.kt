@@ -1,11 +1,13 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -83,6 +86,113 @@ fun PauseDialog(
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
+
+                // LEVEL INFORMATION (Only shown when paused)
+                val xpRatio = (viewModel.player.xp.toFloat() / viewModel.player.xpNeeded).coerceIn(0f, 1f)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("pause_level_info_card"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.Black)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "LEVEL ${viewModel.player.level}",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 16.sp,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = "${viewModel.player.xp} / ${viewModel.player.xpNeeded} XP  (${(xpRatio * 100).toInt()}%)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF555555)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(12.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFFE0E0E0))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(xpRatio)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.Black)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // HERO STATS CARD
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("pause_stats_card"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCCCCCC))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "HERO ATTRIBUTES",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF777777),
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Health:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${viewModel.player.hp.toInt()} / ${viewModel.player.maxHp.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Damage Multiplier:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${String.format("%.1f", viewModel.player.damageMultiplier)}x", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Attack Speed:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${String.format("%.1f", viewModel.player.attackSpeedMultiplier)}x", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Move Speed:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${viewModel.player.moveSpeed.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Armor:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${viewModel.player.armor.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Pickup Radius:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${viewModel.player.pickupRadius.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Enemies Banished:", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text(text = "${uiState.kills}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Character & Class Card
                 Card(

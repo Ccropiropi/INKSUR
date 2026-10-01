@@ -93,4 +93,56 @@ class GameRepository(
     suspend fun clearHistory() {
         runDao.clearHistory()
     }
+
+    suspend fun buyClassFragment(classId: String, costGold: Int = 100, costCrystals: Int = 0): Boolean {
+        val current = getProgressOnce()
+        if (current.gold < costGold || current.crystals < costCrystals) return false
+
+        val fragMap = current.classFragments.split(",")
+            .filter { it.contains(":") }
+            .associate {
+                val parts = it.split(":")
+                parts[0].trim() to (parts[1].trim().toIntOrNull() ?: 0)
+            }.toMutableMap()
+
+        val currentFrags = fragMap[classId] ?: 0
+        fragMap[classId] = currentFrags + 1
+
+        val unlockedList = current.unlockedClasses.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toMutableSet()
+
+        val levelMap = current.classLevels.split(",")
+            .filter { it.contains(":") }
+            .associate {
+                val parts = it.split(":")
+                parts[0].trim() to (parts[1].trim().toIntOrNull() ?: 1)
+            }.toMutableMap()
+
+        var currentLevel = levelMap[classId] ?: 0
+
+        // If locked, obtaining fragment unlocks it at level 1!
+        if (!unlockedList.contains(classId)) {
+            unlockedList.add(classId)
+            currentLevel = 1
+            levelMap[classId] = 1
+        } else {
+            // If already unlocked, level up up to max level 12
+            if (currentLevel < 12) {
+                currentLevel = minOf(12, currentLevel + 1)
+                levelMap[classId] = currentLevel
+            }
+        }
+
+        val updated = current.copy(
+            gold = current.gold - costGold,
+            crystals = current.crystals - costCrystals,
+            unlockedClasses = unlockedList.joinToString(","),
+            classLevels = levelMap.entries.joinToString(",") { "${it.key}:${it.value}" },
+            classFragments = fragMap.entries.joinToString(",") { "${it.key}:${it.value}" }
+        )
+        playerProgressDao.saveProgress(updated)
+        return true
+    }
 }

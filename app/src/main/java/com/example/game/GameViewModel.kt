@@ -13,10 +13,13 @@ import com.example.data.RunRecordEntity
 import com.example.data.SaveManager
 import com.example.model.ActiveSpell
 import com.example.model.ArtifactDefinition
+import com.example.model.AstralExpansionTrait
 import com.example.model.BlankScrollDrop
 import com.example.model.BlotterBurstVisual
 import com.example.model.BrokenStoneEntity
+import com.example.model.ChainReactionTrait
 import com.example.model.CharacterDefinition
+import com.example.model.CinnabarSealEntity
 import com.example.model.ClassDefinition
 import com.example.model.DamageNumber
 import com.example.model.DeepWellTrait
@@ -34,7 +37,9 @@ import com.example.model.LevelUpChoice
 import com.example.model.MagnumOpusVisual
 import com.example.model.ObeliskEntity
 import com.example.model.Orb
+import com.example.model.OrbitalRuneEntity
 import com.example.model.PressurizedInkTrait
+import com.example.model.RapidRotationTrait
 import com.example.model.RazorFlowTrait
 import com.example.model.RedRuneEntity
 import com.example.model.SerratedNibTrait
@@ -48,6 +53,7 @@ import com.example.model.SpellTraitModule
 import com.example.model.SpellTraitType
 import com.example.model.TelegraphedStrike
 import com.example.model.TheEraserBoss
+import com.example.model.VolatileCoreTrait
 import com.example.model.WashBrushArcVisual
 import com.example.model.WideBristleTrait
 import com.example.ui.InjectedItemTarget
@@ -179,6 +185,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val washBrushVisuals = mutableListOf<WashBrushArcVisual>()
     val orbs = mutableListOf<Orb>()
     val damageNumbers = mutableListOf<DamageNumber>()
+    val orbitalRunes = mutableListOf<OrbitalRuneEntity>()
+    val cinnabarSeals = mutableListOf<CinnabarSealEntity>()
 
     // Phase 5 Entities
     val inkwellStructures = mutableListOf<InkwellStructure>()
@@ -300,6 +308,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         magnumOpusVisual.active = false
         magnumOpusVisual.timer = 0f
         washBrushVisuals.clear()
+        orbitalRunes.clear()
+        cinnabarSeals.clear()
         orbs.clear()
         damageNumbers.clear()
         elitePackCounts.clear()
@@ -534,20 +544,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 4. Broken Stone Spawner & Collision
-        if (newTime >= nextBrokenStoneTime && brokenStones.isEmpty() && !enemySpawningHalted) {
-            spawnBrokenStoneNearPlayer()
-            nextBrokenStoneTime += 150f
-        }
-
-        val brokenStoneIterator = brokenStones.iterator()
-        while (brokenStoneIterator.hasNext()) {
-            val stone = brokenStoneIterator.next()
-            stone.pulseTimer += clampedDt
-            if (hypot(player.x - stone.x, player.y - stone.y) < stone.radius + 20f) {
-                triggerBrokenStoneUI(stone)
-                break
-            }
+        // 4. In-Run Shop Trigger: Directly opens shop menu instead of approaching an NPC
+        if (newTime >= nextBrokenStoneTime && !enemySpawningHalted && _uiState.value.screen == ScreenState.PLAYING) {
+            nextBrokenStoneTime += 180f
+            triggerInRunShop()
         }
 
         // 5. Boss Spawns:
@@ -775,6 +775,87 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val burst = burstIterator.next()
             burst.timer += clampedDt
             if (burst.timer >= burst.maxDuration) burstIterator.remove()
+        }
+
+        // 11.2 Update Orbital Runes (Celestial Orbit)
+        val orbitalSpell = _uiState.value.activeSpells.find { it.definition.id == "orbital_runes" }
+        if (orbitalSpell != null) {
+            val isRapid = orbitalSpell.hasTrait(SpellTraitType.RAPID_ROTATION.id)
+            val isExpansion = orbitalSpell.hasTrait(SpellTraitType.ASTRAL_EXPANSION.id)
+            val targetCount = if (isExpansion) 4 else 3
+            val baseRad = if (isExpansion) 130f else 95f
+            val rotSpeed = if (isRapid) 4.5f else 2.8f
+            val dmg = orbitalSpell.definition.baseDamage * player.damageMultiplier * (1f + (orbitalSpell.rank - 1) * 0.25f)
+
+            while (orbitalRunes.size < targetCount) {
+                orbitalRunes.add(
+                    OrbitalRuneEntity(
+                        id = ++entityIdCounter,
+                        orbitAngle = (orbitalRunes.size * (2 * PI / targetCount)).toFloat(),
+                        orbitRadius = baseRad,
+                        damage = dmg,
+                        hasViscous = isRapid
+                    )
+                )
+            }
+
+            for (rune in orbitalRunes) {
+                rune.orbitAngle += rotSpeed * clampedDt
+                rune.orbitRadius = baseRad
+                rune.damage = dmg
+                rune.hasViscous = isRapid
+                rune.hitCooldownTimer -= clampedDt
+
+                val rx = player.x + kotlin.math.cos(rune.orbitAngle) * rune.orbitRadius
+                val ry = player.y + kotlin.math.sin(rune.orbitAngle) * rune.orbitRadius
+
+                if (rune.hitCooldownTimer <= 0f) {
+                    for (enemy in enemies) {
+                        val d = kotlin.math.hypot(enemy.x - rx, enemy.y - ry)
+                        if (d < enemy.type.radius + 18f) {
+                            damageEnemy(enemy, rune.damage)
+                            if (rune.hasViscous) {
+                                enemy.slowTimer = 2.0f
+                                enemy.slowRatio = 0.40f
+                            }
+                            rune.hitCooldownTimer = 0.25f
+                            soundManager.playSplatter()
+                            break
+                        }
+                    }
+                }
+            }
+        } else {
+            orbitalRunes.clear()
+        }
+
+        // 11.3 Update Cinnabar Seals (Detonation Glyphs)
+        val sealIter = cinnabarSeals.iterator()
+        while (sealIter.hasNext()) {
+            val seal = sealIter.next()
+            seal.timer += clampedDt
+            if (!seal.detonated) {
+                if (seal.timer >= seal.fuseTime) {
+                    seal.detonated = true
+                    soundManager.playReactionBoom()
+                    screenShakeTimer = 0.15f
+                    for (enemy in enemies) {
+                        val d = kotlin.math.hypot(enemy.x - seal.x, enemy.y - seal.y)
+                        if (d <= seal.radius + enemy.type.radius) {
+                            damageEnemy(enemy, seal.damage)
+                            if (seal.hasViscous) {
+                                enemy.slowTimer = 2.5f
+                                enemy.slowRatio = 0.40f
+                            }
+                        }
+                    }
+                }
+            } else {
+                seal.blastTimer += clampedDt
+                if (seal.blastTimer >= seal.blastDuration) {
+                    sealIter.remove()
+                }
+            }
         }
 
         // 12. 60-Minute Map Scaling (Density over HP)
@@ -1076,14 +1157,33 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 } else {
+                    val shootAngle = if (enemies.isNotEmpty()) {
+                        var nearestDist = Float.MAX_VALUE
+                        var nearestEnemy: Enemy? = null
+                        for (enemy in enemies) {
+                            val d = hypot(enemy.x - player.x, enemy.y - player.y)
+                            if (d < nearestDist) {
+                                nearestDist = d
+                                nearestEnemy = enemy
+                            }
+                        }
+                        if (nearestEnemy != null && nearestDist <= 750f) {
+                            atan2(nearestEnemy.y - player.y, nearestEnemy.x - player.x)
+                        } else {
+                            facingDir
+                        }
+                    } else {
+                        facingDir
+                    }
+
                     inkProjectiles.add(
                         InkProjectile(
                             id = ++entityIdCounter,
                             x = player.x,
                             y = player.y,
-                            vx = cos(facingDir) * speed,
-                            vy = sin(facingDir) * speed,
-                            angleRad = facingDir,
+                            vx = cos(shootAngle) * speed,
+                            vy = sin(shootAngle) * speed,
+                            angleRad = shootAngle,
                             damage = damage,
                             pierceCount = pierce,
                             strokeLength = activeSpell.definition.projectileLength,
@@ -1195,6 +1295,85 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         hasViscousRune = hasViscous
                     )
                 }
+            }
+
+            SpellCastType.WAVE_TRAIL -> {
+                soundManager.playSwoosh()
+                val speed = activeSpell.definition.baseSpeed * character.projectileSpeedMultiplier
+                val pierce = activeSpell.definition.basePierce + character.bonusPierce
+                inkProjectiles.add(
+                    InkProjectile(
+                        id = ++entityIdCounter,
+                        x = player.x,
+                        y = player.y,
+                        vx = cos(facingDir) * speed,
+                        vy = sin(facingDir) * speed,
+                        angleRad = facingDir,
+                        damage = damage,
+                        pierceCount = pierce,
+                        strokeLength = activeSpell.definition.projectileLength,
+                        strokeWidth = activeSpell.definition.projectileWidth,
+                        sourceSpellId = activeSpell.definition.id,
+                        hasViscousRune = hasViscous,
+                        bounceRemaining = bounceCount,
+                        bounceDamageMultiplier = bounceDelta,
+                        isSacredGeometry = hasRuler,
+                        isGeometryCured = isGeometryMastered
+                    )
+                )
+                // In wake of wave trail, spawn an ink surge puddle
+                puddlePool.obtain(
+                    x = player.x,
+                    y = player.y,
+                    radius = 42f,
+                    damage = damage * 0.5f,
+                    maxLife = 2.5f,
+                    sourceSpellId = activeSpell.definition.id,
+                    hasViscousRune = hasViscous
+                )
+            }
+
+            SpellCastType.ORBITAL_RUNES -> {
+                soundManager.playSwoosh()
+                for (rune in orbitalRunes) {
+                    rune.hitCooldownTimer = 0f
+                }
+            }
+
+            SpellCastType.DETONATION_SEAL -> {
+                soundManager.playSwoosh()
+                var targetX = player.x + kotlin.math.cos(facingDir) * 120f
+                var targetY = player.y + kotlin.math.sin(facingDir) * 120f
+                if (enemies.isNotEmpty()) {
+                    var nearestD = Float.MAX_VALUE
+                    var nearestE: Enemy? = null
+                    for (e in enemies) {
+                        val d = kotlin.math.hypot(e.x - player.x, e.y - player.y)
+                        if (d < nearestD) {
+                            nearestD = d
+                            nearestE = e
+                        }
+                    }
+                    if (nearestE != null && nearestD <= 600f) {
+                        targetX = nearestE.x
+                        targetY = nearestE.y
+                    }
+                }
+
+                val hasVolatile = activeSpell.hasTrait(SpellTraitType.VOLATILE_CORE.id)
+                val sealRadius = if (hasVolatile) activeSpell.definition.arcRadius * 1.45f else activeSpell.definition.arcRadius
+                val sealDmg = if (hasVolatile) damage * 1.55f else damage
+
+                cinnabarSeals.add(
+                    CinnabarSealEntity(
+                        id = ++entityIdCounter,
+                        x = targetX,
+                        y = targetY,
+                        radius = sealRadius,
+                        damage = sealDmg,
+                        hasViscous = hasViscous
+                    )
+                )
             }
         }
     }
@@ -1371,7 +1550,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun triggerBrokenStoneUI(stone: BrokenStoneEntity) {
+    fun triggerInRunShop() {
         val choices = ArtifactDefinition.StoneList.shuffled().take(3)
         _uiState.value = _uiState.value.copy(
             screen = ScreenState.BROKEN_STONE,
@@ -1379,17 +1558,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             heavyWeightCount = masteryManager.heavyWeightCount,
             isHeavyWeightMastered = masteryManager.isHeavyWeightMastered
         )
+        soundManager.playReactionBoom()
+    }
+
+    private fun triggerBrokenStoneUI(stone: BrokenStoneEntity? = null) {
+        triggerInRunShop()
     }
 
     fun purchaseBrokenStoneArtifact(artifact: ArtifactDefinition) {
         if (player.xp < 15) return
         player.xp -= 15
         equipArtifact(artifact)
-        _uiState.value = _uiState.value.copy(screen = ScreenState.PLAYING)
+        val remaining = _uiState.value.brokenStoneChoices.filter { it.id != artifact.id }
+        _uiState.value = _uiState.value.copy(
+            brokenStoneChoices = remaining
+        )
     }
 
     fun closeBrokenStone() {
-        _uiState.value = _uiState.value.copy(screen = ScreenState.PLAYING)
+        brokenStones.clear()
+        _uiState.value = _uiState.value.copy(
+            screen = ScreenState.PLAYING,
+            brokenStoneChoices = emptyList()
+        )
     }
 
     fun selectObeliskArtifact(artifact: ArtifactDefinition) {
@@ -1994,6 +2185,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             "quill_dart" -> listOf(SpellTraitType.SERRATED_NIB, SpellTraitType.FLEX_NIB)
                             "wash_brush" -> listOf(SpellTraitType.WIDE_BRISTLE, SpellTraitType.DEEP_WELL)
                             "steel_fountain" -> listOf(SpellTraitType.RAZOR_FLOW, SpellTraitType.PRESSURIZED_INK)
+                            "orbital_runes" -> listOf(SpellTraitType.ASTRAL_EXPANSION, SpellTraitType.RAPID_ROTATION)
+                            "cinnabar_seal" -> listOf(SpellTraitType.CHAIN_REACTION, SpellTraitType.VOLATILE_CORE)
                             else -> listOf(SpellTraitType.SERRATED_NIB, SpellTraitType.FLEX_NIB)
                         }
 
@@ -2041,6 +2234,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 SpellTraitType.DEEP_WELL -> DeepWellTrait
                 SpellTraitType.RAZOR_FLOW -> RazorFlowTrait
                 SpellTraitType.PRESSURIZED_INK -> PressurizedInkTrait
+                SpellTraitType.ASTRAL_EXPANSION -> AstralExpansionTrait
+                SpellTraitType.RAPID_ROTATION -> RapidRotationTrait
+                SpellTraitType.CHAIN_REACTION -> ChainReactionTrait
+                SpellTraitType.VOLATILE_CORE -> VolatileCoreTrait
             }
             if (!spell.traitModules.any { it.id == module.id }) {
                 spell.traitModules.add(module)
@@ -2123,6 +2320,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         saveManager.spendCrystalsOnCharacter(characterId, cost)
         viewModelScope.launch {
             repository.unlockCharacterWithCrystals(characterId, cost)
+        }
+    }
+
+    fun buyClassFragment(classId: String, costGold: Int = 100, costCrystals: Int = 0) {
+        viewModelScope.launch {
+            val success = repository.buyClassFragment(classId, costGold, costCrystals)
+            if (success) {
+                soundManager.playLevelUp()
+                val progress = repository.getProgressOnce()
+                if (_uiState.value.playerClass.id == classId) {
+                    _uiState.value = _uiState.value.copy(
+                        playerClass = _uiState.value.playerClass.copy(
+                            masteryLevel = progress.getClassLevel(classId)
+                        )
+                    )
+                }
+            }
         }
     }
 }

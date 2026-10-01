@@ -54,8 +54,8 @@ enum class EnemyType(
     // Phase 5 Performance-as-a-Mechanic: The Blotter sponge enemy
     THE_BLOTTER(
         displayName = "The Blotter",
-        baseHp = 800f,
-        speed = 90f,
+        baseHp = 450f,
+        speed = 55f,
         radius = 32f,
         xpValue = 15,
         damage = 0f

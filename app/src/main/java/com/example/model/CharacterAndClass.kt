@@ -50,7 +50,17 @@ data class CharacterDefinition(
             crystalUnlockCost = 150
         )
 
-        val allCharacters = listOf(TheCalligrapher, TheScholar, TheGrandmaster)
+        // Character 4: The Runesmith (+25% AOE, +15% Damage) - Unlocked with 75 Crystals
+        val TheRunesmith = CharacterDefinition(
+            id = "runesmith",
+            name = "The Runesmith",
+            title = "Architect of the Outer Glyphs",
+            description = "+25% Area of Effect, +15% Damage to all sigils and elemental glyphs.",
+            damageMultiplier = 1.15f,
+            crystalUnlockCost = 75
+        )
+
+        val allCharacters = listOf(TheCalligrapher, TheScholar, TheGrandmaster, TheRunesmith)
     }
 }
 
@@ -59,15 +69,208 @@ data class ClassDefinition(
     val name: String,
     val role: String,
     val description: String,
-    val starterSpell: SpellDefinition
+    val starterSpell: SpellDefinition,
+    val glyphType: String = "SPIRE_TOWER",
+    val glyphColorHex: Long = 0xFFE1F5FE,
+    val masteryLevel: Int = 1,
+    val maxMastery: Int = 12
 ) {
     companion object {
+        // ROW 1
         val Scribe = ClassDefinition(
             id = "scribe",
             name = "Scribe",
-            role = "Starter Class",
+            role = "Starter Sorcerer",
             description = "Wields the sharpened quill. Auto-fires Quill Dart in the direction of movement.",
-            starterSpell = SpellDefinition.QuillDart
+            starterSpell = SpellDefinition.QuillDart,
+            glyphType = "SPIRE_TOWER",
+            glyphColorHex = 0xFFFFF9C4,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+        val Wizard = Scribe
+
+        val Astronomer = ClassDefinition(
+            id = "astronomer",
+            name = "Astronomer",
+            role = "Starlight Cartographer",
+            description = "Channels stellar orbits. Summons revolving celestial runes that shred encroaching foes.",
+            starterSpell = SpellDefinition.OrbitalRunes,
+            glyphType = "CONSTELLATION",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Cryomancer = ClassDefinition(
+            id = "cryomancer",
+            name = "Electromancer",
+            role = "Frost & Arcane Needle Piercer",
+            description = "Fires high-frequency penetrating crystal needle volleys at high speed.",
+            starterSpell = SpellDefinition.SteelFountain,
+            glyphType = "SNOWFLAKE",
+            glyphColorHex = 0xFFF8BBD0,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Archivist = ClassDefinition(
+            id = "archivist",
+            name = "Archivist",
+            role = "Grimoire Scholar",
+            description = "Preserves forbidden scriptures. Launches piercing ink darts with extended range.",
+            starterSpell = SpellDefinition.QuillDart,
+            glyphType = "TOME_GATE",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Illuminator = ClassDefinition(
+            id = "illuminator",
+            name = "Illuminator",
+            role = "Celestial Spoke Weaver",
+            description = "Summons revolving cosmic ink runes that continuously orbit the hero, shredding any encroaching foes.",
+            starterSpell = SpellDefinition.OrbitalRunes,
+            glyphType = "WHEEL_SPIKES",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        // ROW 2
+        val Witch = ClassDefinition(
+            id = "witch",
+            name = "Witch",
+            role = "Hex Effigy Master",
+            description = "Curse effigies that trigger sudden localized combustions beneath enemy clusters.",
+            starterSpell = SpellDefinition.CinnabarSeal,
+            glyphType = "VOODOO_DOLL",
+            glyphColorHex = 0xFFECEFF1,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Magician = ClassDefinition(
+            id = "magician",
+            name = "Magician",
+            role = "Arcane Solomon Sigilist",
+            description = "Transmutes ink darts into piercing polymorphic bolts.",
+            starterSpell = SpellDefinition.QuillDart,
+            glyphType = "HEXAGRAM_SEAL",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Bishop = ClassDefinition(
+            id = "bishop",
+            name = "Bishop",
+            role = "Holy Diamond Relic",
+            description = "Sanctified diamond barrier pulses with protective orbital wards.",
+            starterSpell = SpellDefinition.OrbitalRunes,
+            glyphType = "CROSS_DIAMOND",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Sorcerer = ClassDefinition(
+            id = "sorcerer",
+            name = "Sorcerer",
+            role = "Petal Mandala Evoker",
+            description = "Radiates crystalline needle mandalas across the battlefield.",
+            starterSpell = SpellDefinition.SteelFountain,
+            glyphType = "SUN_ROSE",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Druid = ClassDefinition(
+            id = "druid",
+            name = "Druid",
+            role = "Verdant Tree of Life",
+            description = "Sweeps the ground with organic foliage wash leaving damaging ink pools.",
+            starterSpell = SpellDefinition.WashBrush,
+            glyphType = "TREE_RUNE",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        // ROW 3
+        val Pyromancer = ClassDefinition(
+            id = "pyromancer",
+            name = "Pyromancer",
+            role = "Solar Burst Igniter",
+            description = "Inscribes blazing cinnabar runes that explode with volcanic ink shockwaves.",
+            starterSpell = SpellDefinition.CinnabarSeal,
+            glyphType = "EXPLOSIVE_BURST",
+            glyphColorHex = 0xFFFFFFFF,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Shaman = ClassDefinition(
+            id = "shaman",
+            name = "Shaman",
+            role = "Thunder Palm Invoker",
+            description = "Channels atmospheric ink lightning into rapid needle strikes.",
+            starterSpell = SpellDefinition.SteelFountain,
+            glyphType = "LIGHTNING_HAND",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Alchemist = ClassDefinition(
+            id = "alchemist",
+            name = "Alchemist",
+            role = "Detonation Specialist",
+            description = "Inscribes volatile cinnabar sigils onto the parchment that detonate with explosive ink shockwaves.",
+            starterSpell = SpellDefinition.CinnabarSeal,
+            glyphType = "ALCHEMIC_SPIRES",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Scholar = ClassDefinition(
+            id = "scholar_class",
+            name = "Scholar",
+            role = "Tome Inscriber",
+            description = "Deep research grants rapid projectile acceleration and piercing nibs.",
+            starterSpell = SpellDefinition.QuillDart,
+            glyphType = "BOOK_STACK",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Occultist = ClassDefinition(
+            id = "occultist",
+            name = "Occultist",
+            role = "Cauldron Vapor Mist",
+            description = "Boils dark wash fluid that sweeps across enemies with persistent ink residue.",
+            starterSpell = SpellDefinition.WashBrush,
+            glyphType = "CAULDRON",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        // ROW 4
+        val Engraver = ClassDefinition(
+            id = "engraver",
+            name = "Engraver",
+            role = "Rapid Needle Specialist",
+            description = "Wields precision steel nibs. Fires rapid-fire needle barrages with high velocity and native pierce.",
+            starterSpell = SpellDefinition.SteelFountain,
+            glyphType = "CRACKED_ORB",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
         )
 
         val Painter = ClassDefinition(
@@ -75,10 +278,105 @@ data class ClassDefinition(
             name = "Painter",
             role = "AOE Fluid Specialist",
             description = "Wields the wide horsehair wash brush. Executes wide physics overlap sweeps leaving damaging ink puddles.",
-            starterSpell = SpellDefinition.WashBrush
+            starterSpell = SpellDefinition.WashBrush,
+            glyphType = "SWIRL_VORTEX",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
         )
 
-        val allClasses = listOf(Scribe, Painter)
+        val Summoner = ClassDefinition(
+            id = "summoner",
+            name = "Summoner",
+            role = "Coiled Serpent Hierophant",
+            description = "Commands ink serpent effigies that strike from distance.",
+            starterSpell = SpellDefinition.QuillDart,
+            glyphType = "SERPENT_STAFF",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Apostle = ClassDefinition(
+            id = "apostle",
+            name = "Apostle",
+            role = "Holy Grail Bearer",
+            description = "Radiates holy grail blessings with protective revolving glyphs.",
+            starterSpell = SpellDefinition.OrbitalRunes,
+            glyphType = "CHALICE",
+            glyphColorHex = 0xFFF48FB1,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Warlock = ClassDefinition(
+            id = "warlock",
+            name = "Warlock",
+            role = "Gnarled Staff Invoker",
+            description = "Places abyssal cinnabar seals that detonate with corrupted ink waves.",
+            starterSpell = SpellDefinition.CinnabarSeal,
+            glyphType = "HOODED_MAGE",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        // ROW 5
+        val DarkMage = ClassDefinition(
+            id = "dark_mage",
+            name = "Dark Mage",
+            role = "Shadow Silhouette Wraith",
+            description = "Strikes from the shadows with hyper-penetrating black ink darts.",
+            starterSpell = SpellDefinition.QuillDart,
+            glyphType = "SHADOW_FACE",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val BattleMage = ClassDefinition(
+            id = "battle_mage",
+            name = "Battle Mage",
+            role = "Pointed Cap Vanguard",
+            description = "Charges into battle executing wide sweeping melee brush arcs.",
+            starterSpell = SpellDefinition.WashBrush,
+            glyphType = "WIZARD_HAT",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Elementalist = ClassDefinition(
+            id = "elementalist",
+            name = "Elementalist",
+            role = "Corona Solar Flare",
+            description = "Summons an intense corona of orbital elemental runes.",
+            starterSpell = SpellDefinition.OrbitalRunes,
+            glyphType = "SOLAR_CORONA",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val Necromancer = ClassDefinition(
+            id = "necromancer",
+            name = "Necromancer",
+            role = "Weeping Skull Harvester",
+            description = "Fires bone-needle steel fountains that consume fallen essences.",
+            starterSpell = SpellDefinition.SteelFountain,
+            glyphType = "SKULL_VISAGE",
+            glyphColorHex = 0xFFE1F5FE,
+            masteryLevel = 1,
+            maxMastery = 12
+        )
+
+        val allClasses = listOf(
+            Scribe, Astronomer, Cryomancer, Archivist, Illuminator,
+            Witch, Magician, Bishop, Sorcerer, Druid,
+            Pyromancer, Shaman, Alchemist, Scholar, Occultist,
+            Engraver, Painter, Summoner, Apostle, Warlock,
+            DarkMage, BattleMage, Elementalist, Necromancer
+        )
     }
 }
 
@@ -132,6 +430,30 @@ enum class SpellTraitType(
         id = "pressurized_ink",
         displayName = "Pressurized Ink",
         description = "Needles explode on final impact into 3 mini ink shrapnel droplets."
+    ),
+
+    // Orbital Runes Traits (Level 3 Choice)
+    ASTRAL_EXPANSION(
+        id = "astral_expansion",
+        displayName = "Astral Expansion",
+        description = "+40% Orbit Radius and spawns +1 additional celestial rune."
+    ),
+    RAPID_ROTATION(
+        id = "rapid_rotation",
+        displayName = "Rapid Rotation",
+        description = "+60% Orbit Rotation Speed and applies 40% Viscous Slow on contact."
+    ),
+
+    // Cinnabar Seal Traits (Level 3 Choice)
+    CHAIN_REACTION(
+        id = "chain_reaction",
+        displayName = "Chain Reaction",
+        description = "Detonations trigger secondary mini ink explosions on surrounding targets."
+    ),
+    VOLATILE_CORE(
+        id = "volatile_core",
+        displayName = "Volatile Core",
+        description = "+45% Blast Radius and +55% Detonation Shockwave Damage."
     )
 }
 
@@ -190,6 +512,30 @@ object PressurizedInkTrait : SpellTraitModule {
     override val description = SpellTraitType.PRESSURIZED_INK.description
 }
 
+object AstralExpansionTrait : SpellTraitModule {
+    override val id = SpellTraitType.ASTRAL_EXPANSION.id
+    override val name = SpellTraitType.ASTRAL_EXPANSION.displayName
+    override val description = SpellTraitType.ASTRAL_EXPANSION.description
+}
+
+object RapidRotationTrait : SpellTraitModule {
+    override val id = SpellTraitType.RAPID_ROTATION.id
+    override val name = SpellTraitType.RAPID_ROTATION.displayName
+    override val description = SpellTraitType.RAPID_ROTATION.description
+}
+
+object ChainReactionTrait : SpellTraitModule {
+    override val id = SpellTraitType.CHAIN_REACTION.id
+    override val name = SpellTraitType.CHAIN_REACTION.displayName
+    override val description = SpellTraitType.CHAIN_REACTION.description
+}
+
+object VolatileCoreTrait : SpellTraitModule {
+    override val id = SpellTraitType.VOLATILE_CORE.id
+    override val name = SpellTraitType.VOLATILE_CORE.displayName
+    override val description = SpellTraitType.VOLATILE_CORE.description
+}
+
 enum class SpellRuneType(
     val id: String,
     val displayName: String,
@@ -209,7 +555,9 @@ enum class SpellCastType {
     PHYSICS_OVERLAP_ARC,
     OMNIDIRECTIONAL_BARRAGE,
     // Phase 7: Wave that travels forward and leaves a brief damaging trail
-    WAVE_TRAIL
+    WAVE_TRAIL,
+    ORBITAL_RUNES,
+    DETONATION_SEAL
 }
 
 data class SpellDefinition(
@@ -343,10 +691,32 @@ data class SpellDefinition(
             projectileWidth = 28f
         )
 
-        val baseSpells = listOf(QuillDart, WashBrush, SteelFountain)
+        // Class Basic Spells
+        val OrbitalRunes = SpellDefinition(
+            id = "orbital_runes",
+            name = "Orbital Runes",
+            description = "Revolving celestial ink sigils orbit continuously around the hero, dealing continuous contact damage.",
+            castType = SpellCastType.ORBITAL_RUNES,
+            baseDamage = 28f,
+            baseCooldown = 2.4f,
+            arcRadius = 95f
+        )
+
+        val CinnabarSeal = SpellDefinition(
+            id = "cinnabar_seal",
+            name = "Cinnabar Seal",
+            description = "Inscribes volatile crimson cinnabar glyphs beneath enemies that detonate in fiery ink shockwaves.",
+            castType = SpellCastType.DETONATION_SEAL,
+            baseDamage = 80f,
+            baseCooldown = 1.85f,
+            arcRadius = 115f
+        )
+
+        val baseSpells = listOf(QuillDart, WashBrush, SteelFountain, OrbitalRunes, CinnabarSeal)
         val evolvedSpells = listOf(TheHarpoon, InkwellVortex, FountainBarrage)
         val allSpells = listOf(
             QuillDart, WashBrush, SteelFountain,
+            OrbitalRunes, CinnabarSeal,
             TheHarpoon, InkwellVortex, FountainBarrage,
             TheMastersDecree, TheRendingTide
         )
@@ -452,6 +822,7 @@ data class FusionRecipe(
 }
 
 
+data class ActiveSpell(
     val definition: SpellDefinition,
     var rank: Int = 1,
     var cooldownTimer: Float = 0f,

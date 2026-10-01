@@ -444,5 +444,40 @@ class ExampleRobolectricTest {
         val savedData = saveManager.loadSaveData()
         assertEquals(2, savedData.unlockedMapTier)
     }
+
+    @Test
+    fun `verify New Classes alongside their basic spells`() {
+        // Engraver
+        val engraver = ClassDefinition.Engraver
+        assertEquals("Engraver", engraver.name)
+        assertEquals(SpellDefinition.SteelFountain, engraver.starterSpell)
+        assertEquals(SpellCastType.DIRECTIONAL_PROJECTILE, engraver.starterSpell.castType)
+
+        // Illuminator
+        val illuminator = ClassDefinition.Illuminator
+        assertEquals("Illuminator", illuminator.name)
+        assertEquals(SpellDefinition.OrbitalRunes, illuminator.starterSpell)
+        assertEquals(SpellCastType.ORBITAL_RUNES, illuminator.starterSpell.castType)
+
+        // Alchemist
+        val alchemist = ClassDefinition.Alchemist
+        assertEquals("Alchemist", alchemist.name)
+        assertEquals(SpellDefinition.CinnabarSeal, alchemist.starterSpell)
+        assertEquals(SpellCastType.DETONATION_SEAL, alchemist.starterSpell.castType)
+
+        // All classes list
+        assertEquals(24, ClassDefinition.allClasses.size)
+
+        // New Character: The Runesmith
+        val runesmith = CharacterDefinition.TheRunesmith
+        assertEquals("The Runesmith", runesmith.name)
+        assertEquals(75, runesmith.crystalUnlockCost)
+        assertEquals(4, CharacterDefinition.allCharacters.size)
+
+        // Base Spells list contains all 5 basic spells
+        assertEquals(5, SpellDefinition.baseSpells.size)
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.OrbitalRunes))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.CinnabarSeal))
+    }
 }
 
