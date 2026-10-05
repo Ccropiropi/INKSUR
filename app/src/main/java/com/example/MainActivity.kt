@@ -61,6 +61,7 @@ fun InkSurvivorApp(viewModel: GameViewModel = viewModel()) {
             ScreenState.BLANK_SCROLL -> { /* Modal requires selecting item */ }
             ScreenState.INKWELL_CHECKPOINT -> { /* Modal requires user choice */ }
             ScreenState.GAME_OVER -> viewModel.setScreen(ScreenState.MAIN_MENU)
+            ScreenState.SUMI_E_CODEX -> viewModel.setScreen(ScreenState.MAIN_MENU)
             ScreenState.MAIN_MENU -> {}
         }
     }
@@ -73,6 +74,13 @@ fun InkSurvivorApp(viewModel: GameViewModel = viewModel()) {
                     selectedClass = uiState.playerClass,
                     onSelectClass = { classDef -> viewModel.selectClass(classDef) },
                     onStartGame = { viewModel.startNewGame() }
+                )
+            }
+
+            ScreenState.SUMI_E_CODEX -> {
+                com.example.ui.SumiECodexScreen(
+                    viewModel = viewModel,
+                    onBack = { viewModel.setScreen(ScreenState.MAIN_MENU) }
                 )
             }
 
@@ -100,7 +108,8 @@ fun InkSurvivorApp(viewModel: GameViewModel = viewModel()) {
                             choices = uiState.availableChoices,
                             onSelectChoice = { choice ->
                                 viewModel.selectLevelUpChoice(choice)
-                            }
+                            },
+                            activeSpells = uiState.activeSpells
                         )
                     }
 

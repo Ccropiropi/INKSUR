@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -304,6 +305,95 @@ fun PauseDialog(
                         onCheckedChange = {
                             soundEnabled = it
                             viewModel.soundManager.isSoundEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color(0xFFCCCCCC))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Fixed Analog Setting Toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("fixed_analog_toggle"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Fixed Analog Stick",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = if (viewModel.isFixedAnalog) "Fixed at bottom-center" else "Tap-to-place (auto-hides after 5s)",
+                                fontSize = 10.sp,
+                                color = Color(0xFF666666)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = viewModel.isFixedAnalog,
+                        onCheckedChange = { checked ->
+                            viewModel.updateFixedAnalog(checked)
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color(0xFFCCCCCC))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Screen Shake & Impact Frames Toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("screen_shake_toggle"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Screen Shake & Impact Frames",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = if (viewModel.isScreenShakeEnabled) "Camera vibration & freeze-frame impact active" else "Camera vibration & freeze-frame disabled",
+                                fontSize = 10.sp,
+                                color = Color(0xFF666666)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = viewModel.isScreenShakeEnabled,
+                        onCheckedChange = { checked ->
+                            viewModel.updateScreenShakeEnabled(checked)
+                            viewModel.updateImpactFrameEnabled(checked)
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color(0xFFCCCCCC))
                     )

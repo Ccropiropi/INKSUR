@@ -474,10 +474,37 @@ class ExampleRobolectricTest {
         assertEquals(75, runesmith.crystalUnlockCost)
         assertEquals(4, CharacterDefinition.allCharacters.size)
 
-        // Base Spells list contains all 5 basic spells
-        assertEquals(5, SpellDefinition.baseSpells.size)
+        // Base Spells list contains all base spells
+        assertEquals(12, SpellDefinition.baseSpells.size)
         assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.OrbitalRunes))
         assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.CinnabarSeal))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.CalligraphersWake))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.AbyssalSerpent))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.ShadowShuriken))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.GlacialSpike))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.CinnabarMeteor))
+        assertTrue(SpellDefinition.baseSpells.contains(SpellDefinition.ChronoScribe))
+    }
+
+    @Test
+    fun testPassiveStatsAndOrbTiers() {
+        val passiveHp = com.example.model.LevelUpChoice.PassiveStatChoice(
+            statType = com.example.model.PassiveStatType.DRAGON_BLOOD_HP,
+            title = "Dragon Blood Vitality",
+            badge = "+HP",
+            subtitle = "Hero Vitality",
+            description = "+25 Maximum Health and immediately restores 25 HP.",
+            bonusValue = 25f
+        )
+        assertEquals("Dragon Blood Vitality", passiveHp.title)
+
+        val tier1Orb = com.example.model.Orb(id = 1L, x = 0f, y = 0f, value = 1, tier = 1)
+        val tier2Orb = com.example.model.Orb(id = 2L, x = 0f, y = 0f, value = 5, tier = 2)
+        val tier3Orb = com.example.model.Orb(id = 3L, x = 0f, y = 0f, value = 25, tier = 3)
+
+        assertEquals(1, tier1Orb.tier)
+        assertEquals(2, tier2Orb.tier)
+        assertEquals(3, tier3Orb.tier)
     }
 }
 

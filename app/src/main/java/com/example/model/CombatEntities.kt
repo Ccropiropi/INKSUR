@@ -22,6 +22,7 @@ data class InkProjectile(
     val isUltimate: Boolean = false,
     val sourceSpellId: String = "quill_dart",
     val hasViscousRune: Boolean = false,
+    var element: CalligraphicElement? = null,
     // Phase 5 Sacred Geometry Bounce Mechanics
     var bounceRemaining: Int = 0,
     var bounceDamageMultiplier: Float = 1.0f,
@@ -43,7 +44,9 @@ data class InkPuddle(
     var tickInterval: Float = 0.5f,
     var tickTimer: Float = 0f,
     var sourceSpellId: String = "wash_brush",
-    var hasViscousRune: Boolean = false
+    var hasViscousRune: Boolean = false,
+    var isBurningCalligraphy: Boolean = false,
+    var isFrozenInk: Boolean = false
 ) {
     val position: Offset get() = Offset(x, y)
 }
@@ -64,7 +67,9 @@ class InkPuddlePool(private val capacity: Int = 200) {
         maxLife: Float = 4.0f,
         tickInterval: Float = 0.5f,
         sourceSpellId: String = "wash_brush",
-        hasViscousRune: Boolean = false
+        hasViscousRune: Boolean = false,
+        isBurningCalligraphy: Boolean = false,
+        isFrozenInk: Boolean = false
     ): InkPuddle {
         var target: InkPuddle? = null
         for (i in 0 until capacity) {
@@ -97,6 +102,8 @@ class InkPuddlePool(private val capacity: Int = 200) {
         target.tickTimer = 0f
         target.sourceSpellId = sourceSpellId
         target.hasViscousRune = hasViscousRune
+        target.isBurningCalligraphy = isBurningCalligraphy
+        target.isFrozenInk = isFrozenInk
 
         return target
     }
@@ -188,7 +195,7 @@ data class WashBrushArcVisual(
     var life: Float = 0.22f
 )
 
-// Regular Orb and Performance-Optimized Condensed Orb (drops 50 value in a single physics entity)
+// Regular Orb (Tier 1-3) and Performance-Optimized Condensed Orb (drops 50 value in a single physics entity)
 data class Orb(
     val id: Long,
     var x: Float,
@@ -197,7 +204,8 @@ data class Orb(
     var vx: Float = 0f,
     var vy: Float = 0f,
     val isCondensed: Boolean = false,
-    var pulseTimer: Float = 0f
+    var pulseTimer: Float = 0f,
+    val tier: Int = 1
 )
 
 data class DamageNumber(
@@ -294,3 +302,69 @@ data class TheEraserBoss(
         telegraphedStrikes.clear()
     }
 }
+
+// Fluid simulation ink splash particle
+data class InkSplashParticle(
+    val id: Long,
+    var x: Float,
+    var y: Float,
+    var vx: Float,
+    var vy: Float,
+    var radius: Float,
+    var maxRadius: Float,
+    var life: Float,
+    val maxLife: Float,
+    var viscosity: Float = 3.2f,
+    val color: Color = Color(0xFF0F0F14),
+    val secondaryColor: Color = Color(0xFF2B0909),
+    val isCrit: Boolean = false,
+    var tendrilAngle: Float = 0f,
+    var tendrilLength: Float = 0f
+)
+
+// High-contrast ink-brush splash animation particle for elemental combinations
+data class InkBrushSplashParticle(
+    val id: Long,
+    var x: Float,
+    var y: Float,
+    var vx: Float,
+    var vy: Float,
+    var radius: Float,
+    val maxRadius: Float,
+    var life: Float,
+    val maxLife: Float,
+    val starkColor: Color = Color(0xFF000000),
+    val elementalGlowColor: Color,
+    val strokeWidth: Float = 4f,
+    val splatterTendrilAngle: Float = 0f,
+    val splatterTendrilLength: Float = 0f,
+    val isFeatheredBleed: Boolean = true
+)
+
+// Dynamic motion trail node left behind by player movement
+data class PlayerMotionTrailNode(
+    val id: Long,
+    val x: Float,
+    val y: Float,
+    val angle: Float,
+    var life: Float = 0.55f,
+    val maxLife: Float = 0.55f,
+    val width: Float = 22f
+)
+
+// Undulating flowing ink serpent entity
+data class FlowingSerpentEntity(
+    val id: Long,
+    var x: Float,
+    var y: Float,
+    var targetAngle: Float,
+    var currentAngle: Float,
+    var speed: Float,
+    var damage: Float,
+    var radius: Float,
+    var life: Float,
+    val maxLife: Float,
+    var waveTimer: Float = 0f,
+    val segments: MutableList<Offset> = mutableListOf(),
+    var tickTimer: Float = 0f
+)

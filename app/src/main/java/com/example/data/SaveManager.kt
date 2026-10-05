@@ -26,7 +26,12 @@ data class SaveData(
     val unlockedMapTier: Int = 1,
     val totalRuns: Int = 0,
     val totalKills: Int = 0,
-    val maxSurvivalSeconds: Int = 0
+    val maxSurvivalSeconds: Int = 0,
+    val fixedAnalog: Boolean = true,
+    val screenShakeEnabled: Boolean = true,
+    val hapticFeedbackEnabled: Boolean = true,
+    val impactFrameEnabled: Boolean = true,
+    val unlockedCodexEnemies: String = "BASIC_CONSTRUCT"
 )
 
 data class BookmarkRunState(
@@ -91,7 +96,12 @@ class SaveManager(private val context: Context) {
                 unlockedMapTier = json.optInt("unlockedMapTier", 1),
                 totalRuns = json.optInt("totalRuns", 0),
                 totalKills = json.optInt("totalKills", 0),
-                maxSurvivalSeconds = json.optInt("maxSurvivalSeconds", 0)
+                maxSurvivalSeconds = json.optInt("maxSurvivalSeconds", 0),
+                fixedAnalog = json.optBoolean("fixedAnalog", true),
+                screenShakeEnabled = json.optBoolean("screenShakeEnabled", true),
+                hapticFeedbackEnabled = json.optBoolean("hapticFeedbackEnabled", true),
+                impactFrameEnabled = json.optBoolean("impactFrameEnabled", true),
+                unlockedCodexEnemies = json.optString("unlockedCodexEnemies", "BASIC_CONSTRUCT")
             )
         } catch (e: Exception) {
             SaveData()
@@ -116,11 +126,49 @@ class SaveManager(private val context: Context) {
                 put("totalRuns", data.totalRuns)
                 put("totalKills", data.totalKills)
                 put("maxSurvivalSeconds", data.maxSurvivalSeconds)
+                put("fixedAnalog", data.fixedAnalog)
+                put("screenShakeEnabled", data.screenShakeEnabled)
+                put("hapticFeedbackEnabled", data.hapticFeedbackEnabled)
+                put("impactFrameEnabled", data.impactFrameEnabled)
+                put("unlockedCodexEnemies", data.unlockedCodexEnemies)
             }
             saveFile.writeText(json.toString(2), Charsets.UTF_8)
         } catch (e: Exception) {
             // Graceful fallback
         }
+    }
+
+    @Synchronized
+    fun unlockCodexEnemy(enemyTypeName: String) {
+        val current = loadSaveData()
+        val set = current.unlockedCodexEnemies.split(",").filter { it.isNotBlank() }.toMutableSet()
+        if (set.add(enemyTypeName)) {
+            writeSaveData(current.copy(unlockedCodexEnemies = set.joinToString(",")))
+        }
+    }
+
+    @Synchronized
+    fun setFixedAnalog(fixed: Boolean) {
+        val current = loadSaveData()
+        writeSaveData(current.copy(fixedAnalog = fixed))
+    }
+
+    @Synchronized
+    fun setScreenShake(enabled: Boolean) {
+        val current = loadSaveData()
+        writeSaveData(current.copy(screenShakeEnabled = enabled))
+    }
+
+    @Synchronized
+    fun setHapticFeedback(enabled: Boolean) {
+        val current = loadSaveData()
+        writeSaveData(current.copy(hapticFeedbackEnabled = enabled))
+    }
+
+    @Synchronized
+    fun setImpactFrame(enabled: Boolean) {
+        val current = loadSaveData()
+        writeSaveData(current.copy(impactFrameEnabled = enabled))
     }
 
     /**

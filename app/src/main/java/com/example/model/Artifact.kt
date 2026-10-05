@@ -32,6 +32,9 @@ data class ArtifactDefinition(
         const val ARCHETYPE_HEAVY_WEIGHT = "Heavy Weight"
         const val ARCHETYPE_CORRUPTED_MEDIUM = "Corrupted Medium"
         const val ARCHETYPE_SACRED_GEOMETRY = "Sacred Geometry"
+        const val ARCHETYPE_ELEMENTAL_ALCHEMIST = "Elemental Alchemist"
+        const val ARCHETYPE_BLOOD_CALLIGRAPHY = "Blood Calligraphy"
+        const val ARCHETYPE_CELESTIAL_VOID = "Celestial Void"
 
         // ==========================================
         // ARCHETYPE 1: HEAVY WEIGHT (Kinetic / Mass)
@@ -221,16 +224,83 @@ data class ArtifactDefinition(
             attackSpeedModifier = 0.20f
         )
 
-        val StoneList = listOf(
-            LeadNib, AnvilSeal, ColossusParchment, QuickSilverInk, FeatherWeightSeal,
-            SpoiledInk, FungalPaper, BlightedQuill, MoldyParchment,
-            BrassCompass, GraphPaper, ProtractorPlate, GoldenSpiral
+        val CinnabarPhial = ArtifactDefinition(
+            id = "cinnabar_phial",
+            name = "Cinnabar Phial",
+            tier = ArtifactTier.LEGENDARY,
+            archetypeTag = ARCHETYPE_ELEMENTAL_ALCHEMIST,
+            description = "+50% Elemental Reaction Damage, attacks ignite foes in lingering Cinnabar flames.",
+            damageModifier = 0.30f
         )
 
-        val ObeliskList = listOf(
-            TheIronVats, ToxicPigment, TheFracturedRuler,
-            BleachParasite, SootCrown, ColossusParchment
+        val FrostboundCalliper = ArtifactDefinition(
+            id = "frostbound_calliper",
+            name = "Frostbound Calliper",
+            tier = ArtifactTier.RARE,
+            archetypeTag = ARCHETYPE_ELEMENTAL_ALCHEMIST,
+            description = "Enemies hit by Frozen Ink explode into 6 piercing frost needles. +25% Attack Speed.",
+            attackSpeedModifier = 0.25f
         )
+
+        val InkstoneOfEternity = ArtifactDefinition(
+            id = "inkstone_of_eternity",
+            name = "Inkstone of Eternity",
+            tier = ArtifactTier.MASTER,
+            archetypeTag = ARCHETYPE_HEAVY_WEIGHT,
+            description = "+60 Max HP, +5 Armor, +35% Spell Area of Effect.",
+            maxHpMultiplier = 0.60f,
+            armorModifier = 5f
+        )
+
+        val CelestialAstrolabe = ArtifactDefinition(
+            id = "celestial_astrolabe",
+            name = "Celestial Astrolabe",
+            tier = ArtifactTier.LEGENDARY,
+            archetypeTag = ARCHETYPE_CELESTIAL_VOID,
+            description = "+45% Astral Damage, +40 Magnet Radius, summons a celestial orbit node.",
+            damageModifier = 0.45f,
+            pickupRadiusModifier = 40f
+        )
+
+        val VampiricParchment = ArtifactDefinition(
+            id = "vampiric_parchment",
+            name = "Vampiric Parchment",
+            tier = ArtifactTier.CURSED,
+            archetypeTag = ARCHETYPE_BLOOD_CALLIGRAPHY,
+            description = "+75% Bleed/Poison Damage, slain enemies occasionally restore 5 HP. -20% Move Speed.",
+            poisonDamageMultiplier = 0.75f,
+            moveSpeedModifier = -0.20f,
+            hasVampirism = true
+        )
+
+        val VoidChisel = ArtifactDefinition(
+            id = "void_chisel",
+            name = "Void Chisel",
+            tier = ArtifactTier.MASTER,
+            archetypeTag = ARCHETYPE_CORRUPTED_MEDIUM,
+            description = "+60% Critical Hit Damage, +6 Armor, converts 10% taken damage into ink nova.",
+            armorModifier = 6f,
+            damageModifier = 0.40f
+        )
+
+        val StoneList: List<ArtifactDefinition>
+            get() = listOf(
+                LeadNib, AnvilSeal, ColossusParchment, QuickSilverInk, FeatherWeightSeal,
+                SpoiledInk, FungalPaper, BlightedQuill, MoldyParchment,
+                BrassCompass, GraphPaper, ProtractorPlate, GoldenSpiral,
+                CinnabarPhial, FrostboundCalliper, InkstoneOfEternity, CelestialAstrolabe, VampiricParchment, VoidChisel,
+                TheLeakyPen, TheBrokenMetronome, CyanCartridge, MagentaCartridge, YellowCartridge
+            )
+
+        val ObeliskList: List<ArtifactDefinition>
+            get() = listOf(
+                TheIronVats, ToxicPigment, TheFracturedRuler,
+                BleachParasite, SootCrown, ColossusParchment,
+                CinnabarPhial, FrostboundCalliper, InkstoneOfEternity,
+                CelestialAstrolabe, VampiricParchment, VoidChisel,
+                GoldenSpiral, TheLeakyPen, TheBrokenMetronome,
+                CyanCartridge, MagentaCartridge, YellowCartridge
+            )
 
         // ══════════════════════════════════════════════════════════════════════
         // PHASE 7: RULE-BREAKING CURSED ARTIFACTS (Behavioral Shifts)

@@ -145,4 +145,58 @@ class GameRepository(
         playerProgressDao.saveProgress(updated)
         return true
     }
+
+    suspend fun setDevModeUnlockedAll() {
+        val devProgress = PlayerProgressEntity(
+            id = 1,
+            gold = 999999,
+            crystals = 99999,
+            inkStones = 99999,
+            totalRuns = 50,
+            totalKills = 15000,
+            maxSurvivalSeconds = 3600,
+            unlockedTools = "QUILL,WASH_BRUSH,STEEL_FOUNTAIN",
+            unlockedCharacters = "calligrapher,painter,scholar,master,celestial",
+            metaAtkLevel = 10,
+            metaSpeedLevel = 10,
+            metaMagnetLevel = 10,
+            hpLevel = 10,
+            speedLevel = 10,
+            cooldownLevel = 10,
+            areaLevel = 10,
+            viscosityLevel = 10,
+            resonanceLevel = 10,
+            unlockedClasses = "scribe,painter,monk,scholar",
+            classLevels = "scribe:12,painter:12,monk:12,scholar:12",
+            classFragments = "scribe:99,painter:99,monk:99,scholar:99"
+        )
+        playerProgressDao.saveProgress(devProgress)
+    }
+
+    suspend fun resetToFreshZero() {
+        val cleanProgress = PlayerProgressEntity(
+            id = 1,
+            gold = 0,
+            crystals = 0,
+            inkStones = 0,
+            totalRuns = 0,
+            totalKills = 0,
+            maxSurvivalSeconds = 0,
+            unlockedTools = "QUILL",
+            unlockedCharacters = "calligrapher",
+            metaAtkLevel = 0,
+            metaSpeedLevel = 0,
+            metaMagnetLevel = 0,
+            hpLevel = 0,
+            speedLevel = 0,
+            cooldownLevel = 0,
+            areaLevel = 0,
+            viscosityLevel = 0,
+            resonanceLevel = 0,
+            unlockedClasses = "scribe",
+            classLevels = "scribe:1",
+            classFragments = ""
+        )
+        playerProgressDao.saveProgress(cleanProgress)
+    }
 }

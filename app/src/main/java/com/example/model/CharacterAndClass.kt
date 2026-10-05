@@ -251,9 +251,9 @@ data class ClassDefinition(
         val Occultist = ClassDefinition(
             id = "occultist",
             name = "Occultist",
-            role = "Cauldron Vapor Mist",
-            description = "Boils dark wash fluid that sweeps across enemies with persistent ink residue.",
-            starterSpell = SpellDefinition.WashBrush,
+            role = "Ink Stride Shadow",
+            description = "Channels ancient ink stride. Leaves a continuous trail of burning sumi-e footprints while moving that slows and melts foes.",
+            starterSpell = SpellDefinition.CalligraphersWake,
             glyphType = "CAULDRON",
             glyphColorHex = 0xFFE1F5FE,
             masteryLevel = 1,
@@ -289,8 +289,8 @@ data class ClassDefinition(
             id = "summoner",
             name = "Summoner",
             role = "Coiled Serpent Hierophant",
-            description = "Commands ink serpent effigies that strike from distance.",
-            starterSpell = SpellDefinition.QuillDart,
+            description = "Commands the Abyssal Serpent to glide across the canvas, shredding foes and leaving toxic ink ripples.",
+            starterSpell = SpellDefinition.AbyssalSerpent,
             glyphType = "SERPENT_STAFF",
             glyphColorHex = 0xFFE1F5FE,
             masteryLevel = 1,
@@ -337,9 +337,9 @@ data class ClassDefinition(
         val BattleMage = ClassDefinition(
             id = "battle_mage",
             name = "Battle Mage",
-            role = "Pointed Cap Vanguard",
-            description = "Charges into battle executing wide sweeping melee brush arcs.",
-            starterSpell = SpellDefinition.WashBrush,
+            role = "Tidal Vanguard Cap",
+            description = "Vanguard warrior that releases wide sweeping crescent tidal waves of compressed black ink.",
+            starterSpell = SpellDefinition.TidalBrushWave,
             glyphType = "WIZARD_HAT",
             glyphColorHex = 0xFFE1F5FE,
             masteryLevel = 1,
@@ -557,7 +557,9 @@ enum class SpellCastType {
     // Phase 7: Wave that travels forward and leaves a brief damaging trail
     WAVE_TRAIL,
     ORBITAL_RUNES,
-    DETONATION_SEAL
+    DETONATION_SEAL,
+    FOOTPRINT_TRAIL,
+    FLOWING_SERPENT
 }
 
 data class SpellDefinition(
@@ -573,6 +575,8 @@ data class SpellDefinition(
     val projectileWidth: Float = 10f,
     val arcRadius: Float = 160f,
     val arcAngleSpanRad: Float = 1.9f,
+    val areaRadius: Float = 40f,
+    val durationSeconds: Float = 3.0f,
     val isHarpoon: Boolean = false,
     val isVortex: Boolean = false,
     val isBarrage: Boolean = false,
@@ -712,11 +716,96 @@ data class SpellDefinition(
             arcRadius = 115f
         )
 
-        val baseSpells = listOf(QuillDart, WashBrush, SteelFountain, OrbitalRunes, CinnabarSeal)
+        // New Mechanic Spells: Damaging Footprints, Undulating Serpent, and Tidal Waves
+        val CalligraphersWake = SpellDefinition(
+            id = "calligraphers_wake",
+            name = "Calligrapher's Wake",
+            description = "Leaves a continuous trail of searing sumi-e ink footprints while moving that burns and slows encroaching foes.",
+            castType = SpellCastType.FOOTPRINT_TRAIL,
+            baseDamage = 26f,
+            baseCooldown = 0.22f,
+            areaRadius = 38f,
+            durationSeconds = 4.0f
+        )
+
+        val AbyssalSerpent = SpellDefinition(
+            id = "abyssal_serpent",
+            name = "Abyssal Serpent",
+            description = "Summons an undulating fluid ink serpent that glides across the canvas, shredding enemies and leaving toxic ink ripples.",
+            castType = SpellCastType.FLOWING_SERPENT,
+            baseDamage = 54f,
+            baseCooldown = 3.2f,
+            baseSpeed = 390f,
+            areaRadius = 32f,
+            durationSeconds = 4.5f
+        )
+
+        val TidalBrushWave = SpellDefinition(
+            id = "tidal_brush_wave",
+            name = "Tidal Cleave",
+            description = "Releases a surging crescent wave of compressed black ink that washes over hordes in a wide arc.",
+            castType = SpellCastType.WAVE_TRAIL,
+            baseDamage = 46f,
+            baseCooldown = 1.6f,
+            baseSpeed = 480f,
+            areaRadius = 180f,
+            durationSeconds = 1.5f
+        )
+
+        val ShadowShuriken = SpellDefinition(
+            id = "shadow_shuriken",
+            name = "Shadow Shuriken",
+            description = "Fires spinning folded origami stars that slice through enemies and bounce between nearby paper foes.",
+            castType = SpellCastType.DIRECTIONAL_PROJECTILE,
+            baseDamage = 32f,
+            baseCooldown = 0.95f,
+            baseSpeed = 620f,
+            basePierce = 3,
+            projectileLength = 26f,
+            projectileWidth = 26f
+        )
+
+        val GlacialSpike = SpellDefinition(
+            id = "glacial_spike",
+            name = "Glacial Spike",
+            description = "Thrusts frozen black-ice needles upward beneath enemies, freezing foes and shattering wet ink.",
+            castType = SpellCastType.DETONATION_SEAL,
+            baseDamage = 75f,
+            baseCooldown = 1.9f,
+            arcRadius = 120f
+        )
+
+        val CinnabarMeteor = SpellDefinition(
+            id = "cinnabar_meteor",
+            name = "Cinnabar Meteor",
+            description = "Calls down blazing droplets of celestial cinnabar that explode on impact, igniting fiery pools.",
+            castType = SpellCastType.DETONATION_SEAL,
+            baseDamage = 95f,
+            baseCooldown = 2.4f,
+            arcRadius = 145f
+        )
+
+        val ChronoScribe = SpellDefinition(
+            id = "chrono_scribe",
+            name = "Chronos Orbit",
+            description = "Sweeps an astrological dial of celestial ink around the hero, heavily slowing and grinding all enemies.",
+            castType = SpellCastType.ORBITAL_RUNES,
+            baseDamage = 38f,
+            baseCooldown = 2.8f,
+            arcRadius = 135f
+        )
+
+        val baseSpells = listOf(
+            QuillDart, WashBrush, SteelFountain, OrbitalRunes, CinnabarSeal,
+            CalligraphersWake, AbyssalSerpent, TidalBrushWave,
+            ShadowShuriken, GlacialSpike, CinnabarMeteor, ChronoScribe
+        )
         val evolvedSpells = listOf(TheHarpoon, InkwellVortex, FountainBarrage)
         val allSpells = listOf(
             QuillDart, WashBrush, SteelFountain,
             OrbitalRunes, CinnabarSeal,
+            CalligraphersWake, AbyssalSerpent, TidalBrushWave,
+            ShadowShuriken, GlacialSpike, CinnabarMeteor, ChronoScribe,
             TheHarpoon, InkwellVortex, FountainBarrage,
             TheMastersDecree, TheRendingTide
         )
@@ -844,4 +933,26 @@ data class ActiveSpell(
     fun getEffectiveDamage(damageMultiplier: Float): Float {
         return definition.baseDamage * (1f + (rank - 1) * 0.25f) * damageMultiplier
     }
+
+    fun getEffectiveAreaRadius(areaMultiplier: Float = 1.0f): Float {
+        val rankBonus = 1f + (rank - 1) * 0.12f
+        val baseR = if (definition.areaRadius > 0f) definition.areaRadius else definition.arcRadius
+        return baseR * rankBonus * areaMultiplier
+    }
+
+    fun getEffectiveDuration(durationMultiplier: Float = 1.0f): Float {
+        val rankBonus = 1f + (rank - 1) * 0.10f
+        return definition.durationSeconds * rankBonus * durationMultiplier
+    }
+
+    val element: CalligraphicElement
+        get() {
+            return when {
+                definition.id == "cinnabar_seal" || definition.id == "cinnabar_meteor" || hasTrait("volatile_core") || hasTrait("chain_reaction") -> CalligraphicElement.CINNABAR_FLAME
+                definition.id == "steel_fountain" || definition.id == "quill_dart" || definition.id == "the_harpoon" || definition.id == "fountain_barrage" || definition.id == "glacial_spike" -> CalligraphicElement.FROST
+                definition.id == "wash_brush" || definition.id == "calligraphers_wake" || definition.id == "the_rending_tide" || definition.id == "inkwell_vortex" || definition.id == "shadow_shuriken" || hasTrait("wide_bristle") -> CalligraphicElement.CORROSIVE_ACID
+                definition.id == "orbital_runes" || definition.id == "abyssal_serpent" || definition.id == "the_masters_decree" || definition.id == "chrono_scribe" || hasTrait("astral_expansion") -> CalligraphicElement.CELESTIAL_ASTRAL
+                else -> CalligraphicElement.CORROSIVE_ACID
+            }
+        }
 }

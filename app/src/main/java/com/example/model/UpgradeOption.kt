@@ -49,4 +49,22 @@ sealed class LevelUpChoice {
         override val subtitle: String get() = if (currentStacks > 0) "Current: Lv.$currentStacks  →  Lv.$nextStacks" else "New Item (Lv.1)"
         override val description: String get() = gearType.description
     }
+
+    data class PassiveStatChoice(
+        val statType: PassiveStatType,
+        override val title: String,
+        override val badge: String,
+        override val subtitle: String,
+        override val description: String,
+        val bonusValue: Float
+    ) : LevelUpChoice()
+}
+
+enum class PassiveStatType {
+    DRAGON_BLOOD_HP,
+    SWIFT_BRUSH_SPEED,
+    CARBON_DENSITY_DMG,
+    EXPANDED_WELL_MAGNET,
+    TEMPERED_NIB_ARMOR,
+    KEEN_BRISTLE_CRIT
 }

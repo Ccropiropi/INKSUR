@@ -3,6 +3,7 @@ package com.example.ui
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,14 +41,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalDensity
+import com.example.model.InkSplashParticle
+import kotlinx.coroutines.delay
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.IntOffset
@@ -71,9 +78,14 @@ import com.example.game.GameViewModel
 import com.example.model.BlankScrollDrop
 import com.example.model.BlotterBurstVisual
 import com.example.model.BrokenStoneEntity
+import com.example.model.CalligraphicElement
 import com.example.model.DamageNumber
+import com.example.model.ElementalParticle
+import com.example.model.ElementalReactionType
 import com.example.model.Enemy
 import com.example.model.EnemyType
+import com.example.model.FlowingSerpentEntity
+import com.example.model.InkBrushSplashParticle
 import com.example.model.InkPuddle
 import com.example.model.InkProjectile
 import com.example.model.InkwellStructure
@@ -81,7 +93,9 @@ import com.example.model.InkwellVortexEntity
 import com.example.model.MagnumOpusVisual
 import com.example.model.ObeliskEntity
 import com.example.model.Orb
+import com.example.model.PlayerMotionTrailNode
 import com.example.model.RedRuneEntity
+import com.example.model.ScreenElementalReactionVisual
 import com.example.model.SpellRuneDrop
 import com.example.model.TelegraphedStrike
 import com.example.model.TheEraserBoss
@@ -137,7 +151,7 @@ fun BattleScreen(
         val screenCenterY = screenHeight / 2f
 
         // Camera: 2D top-down perspective, locked to player character + screen shake
-        val shakeMag = uiState.screenShakeTimer * 12f
+        val shakeMag = if (viewModel.isScreenShakeEnabled) uiState.screenShakeTimer * 12f else 0f
         val shakeX = if (shakeMag > 0f) sin(uiState.timeSurvivedSeconds * 50f) * shakeMag else 0f
         val shakeY = if (shakeMag > 0f) cos(uiState.timeSurvivedSeconds * 45f) * shakeMag else 0f
 
@@ -230,9 +244,34 @@ fun BattleScreen(
                 drawOrbitalRune(rune, camX, camY, viewModel.player.x, viewModel.player.y)
             }
 
+            // 7.4 Draw Fluid Simulation Ink Splash Particles (Canvas & Shaders)
+            for (splash in viewModel.inkSplashParticles) {
+                drawFluidInkSplash(splash, camX, camY)
+            }
+
+            // 7.5 Draw Flowing Ink Serpents (Dynamic Summoned Creatures)
+            for (serpent in viewModel.flowingSerpents) {
+                drawFlowingSerpent(serpent, camX, camY)
+            }
+
+            // 7.6 Draw Elemental Particles (Ice Shards, Fire Embers, Cosmic Motes)
+            for (part in viewModel.elementalParticles) {
+                drawElementalParticle(part, camX, camY)
+            }
+
+            // 7.7 Draw Screen Elemental Reactions (Frozen Ink, Burning Calligraphy, etc.)
+            for (reaction in viewModel.elementalReactionVisuals) {
+                drawScreenElementalReaction(reaction, camX, camY)
+            }
+
             // 8. Draw Player Attacks (Quill Darts & Evolved Spells)
             for (proj in viewModel.inkProjectiles) {
                 drawQuillDart(proj, camX, camY)
+            }
+
+            // 8.5 Draw Dynamic Player Ink Motion Trails (Fluid Brushstroke Ribbon)
+            for (trail in viewModel.playerMotionTrails) {
+                drawPlayerMotionTrail(trail, camX, camY)
             }
 
             // 9. Draw Player Character (Scribe / Painter)
@@ -247,6 +286,14 @@ fun BattleScreen(
                 hpRatio = hpRatio
             )
 
+            // 9.05 Subtle Elemental Status Effect HUD above Player Character (Active Elemental Stacks)
+            drawPlayerElementalStatusHud(
+                x = viewModel.player.x + camX,
+                y = viewModel.player.y + camY,
+                elementalStacks = viewModel.playerElementalStacks,
+                time = uiState.timeSurvivedSeconds
+            )
+
             // 9.1 Draw Telegraphed Geometric Eraser Strikes (Phase 5 Climax)
             if (viewModel.theEraserBoss.active) {
                 for (strike in viewModel.theEraserBoss.telegraphedStrikes) {
@@ -259,22 +306,122 @@ fun BattleScreen(
                 drawDamageNumber(dn, camX, camY)
             }
 
+            // 10.5 Draw High-Contrast Ink-Brush Splash Particles (Elemental Reactions like Frozen Ink)
+            for (splash in viewModel.inkBrushSplashParticles) {
+                drawInkBrushSplashParticle(splash, camX, camY)
+            }
+
             // 11. Draw Level 100 Magnum Opus Ultimate Calligraphy Stroke Effect
             if (viewModel.magnumOpusVisual.active) {
                 drawMagnumOpusEffect(viewModel.magnumOpusVisual)
             }
+
+            // 11.5 Draw High-Contrast Impact Frame / Shake Feedback Overlay
+            if (viewModel.impactFrameTimer > 0f && viewModel.isImpactFrameEnabled) {
+                drawImpactFrameOverlay(
+                    reaction = viewModel.activeImpactReaction,
+                    timer = viewModel.impactFrameTimer
+                )
+            }
         }
 
-        // Virtual Analog Stick (Movement ONLY, centered at middle bottom)
-        VirtualAnalogStick(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 24.dp),
-            onMove = { offset ->
-                viewModel.joystickVector = offset
-            }
+        // Virtual Analog Stick Controls
+        val isFixed = viewModel.isFixedAnalog
+        var dynamicStickCenter by remember { mutableStateOf<Offset?>(null) }
+        var dynamicDragOffset by remember { mutableStateOf(Offset.Zero) }
+        var isInteracting by remember { mutableStateOf(false) }
+        var lastInteractionTime by remember { mutableLongStateOf(0L) }
+        var dynamicStickVisible by remember { mutableStateOf(false) }
+
+        val animatedAlpha by animateFloatAsState(
+            targetValue = if (isFixed) 1f else if (dynamicStickVisible) 1f else 0f,
+            animationSpec = tween(durationMillis = 350),
+            label = "analog_alpha"
         )
+
+        // 5-second auto-hide timer for tap mode
+        LaunchedEffect(isInteracting, lastInteractionTime, isFixed) {
+            if (!isFixed && !isInteracting && dynamicStickVisible) {
+                delay(5000L)
+                dynamicStickVisible = false
+            }
+        }
+
+        // Tap-to-steer gesture detector across screen when in dynamic tap mode
+        if (!isFixed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(isFixed) {
+                        detectDragGestures(
+                            onDragStart = { startOffset ->
+                                dynamicStickCenter = startOffset
+                                dynamicDragOffset = Offset.Zero
+                                isInteracting = true
+                                dynamicStickVisible = true
+                                lastInteractionTime = System.currentTimeMillis()
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val newOffset = dynamicDragOffset + dragAmount
+                                val maxPx = 65f * density
+                                val dist = newOffset.getDistance()
+                                val clamped = if (dist > maxPx) newOffset * (maxPx / dist) else newOffset
+                                dynamicDragOffset = clamped
+                                viewModel.joystickVector = clamped / maxPx
+                                isInteracting = true
+                                lastInteractionTime = System.currentTimeMillis()
+                            },
+                            onDragEnd = {
+                                dynamicDragOffset = Offset.Zero
+                                viewModel.joystickVector = Offset.Zero
+                                isInteracting = false
+                                lastInteractionTime = System.currentTimeMillis()
+                            },
+                            onDragCancel = {
+                                dynamicDragOffset = Offset.Zero
+                                viewModel.joystickVector = Offset.Zero
+                                isInteracting = false
+                                lastInteractionTime = System.currentTimeMillis()
+                            }
+                        )
+                    }
+            )
+        }
+
+        // Virtual Analog Stick (Fixed Bottom-Center vs Dynamic Tap-to-Place)
+        if (isFixed) {
+            VirtualAnalogStick(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 24.dp),
+                onMove = { offset ->
+                    viewModel.joystickVector = offset
+                }
+            )
+        } else {
+            // Dynamic Tap Mode: hidden at 0% opacity by default; appears at tap position; auto-hides after 5s
+            if (dynamicStickCenter != null && animatedAlpha > 0.005f) {
+                val density = LocalDensity.current
+                val stickRadiusPx = with(density) { 75.dp.toPx() }
+                val center = dynamicStickCenter!!
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (center.x - stickRadiusPx).roundToInt(),
+                                (center.y - stickRadiusPx).roundToInt()
+                            )
+                        }
+                        .alpha(animatedAlpha)
+                ) {
+                    OccultCompassDialAndKnob(
+                        dragOffset = dynamicDragOffset
+                    )
+                }
+            }
+        }
 
         // Top HUD Overlay
         BattleHUD(
@@ -286,6 +433,18 @@ fun BattleScreen(
             player = viewModel.player,
             onPauseClick = onPauseClick
         )
+
+        // Screen-Filling Calligraphic Elemental Reaction Banner
+        val banner = viewModel.activeElementalBanner
+        if (banner != null) {
+            ElementalReactionBanner(
+                reaction = banner,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 64.dp)
+            )
+        }
     }
 }
 
@@ -326,21 +485,83 @@ private fun DrawScope.drawInkPuddleDecal(puddle: InkPuddle, camX: Float, camY: F
     val r = puddle.radius
     val lifeRatio = (1f - (puddle.life / puddle.maxLife)).coerceIn(0.15f, 1f)
 
-    drawCircle(
-        color = StarkBlackInk.copy(alpha = 0.25f * lifeRatio),
-        radius = r,
-        center = Offset(px, py)
-    )
-    drawCircle(
-        color = StarkBlackInk.copy(alpha = 0.65f * lifeRatio),
-        radius = r * 0.65f,
-        center = Offset(px, py)
-    )
-    drawCircle(
-        color = StarkBlackInk.copy(alpha = 0.85f * lifeRatio),
-        radius = r * 0.28f,
-        center = Offset(px, py)
-    )
+    if (puddle.isFrozenInk) {
+        // Frozen Solid Black Ice Puddle with Glacial Fractures
+        drawCircle(
+            color = Color(0xFF001F3F).copy(alpha = 0.55f * lifeRatio),
+            radius = r,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color(0xFF00E5FF).copy(alpha = 0.40f * lifeRatio),
+            radius = r * 0.9f,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color(0xFF80D8FF).copy(alpha = 0.8f * lifeRatio),
+            radius = r,
+            center = Offset(px, py),
+            style = Stroke(width = 2.5f)
+        )
+        // Ice fracture lines
+        drawLine(
+            color = Color.White.copy(alpha = 0.7f * lifeRatio),
+            start = Offset(px - r * 0.7f, py - r * 0.4f),
+            end = Offset(px + r * 0.6f, py + r * 0.5f),
+            strokeWidth = 2f
+        )
+        drawLine(
+            color = Color(0xFF00E5FF).copy(alpha = 0.7f * lifeRatio),
+            start = Offset(px + r * 0.4f, py - r * 0.6f),
+            end = Offset(px - r * 0.3f, py + r * 0.7f),
+            strokeWidth = 1.8f
+        )
+    } else if (puddle.isBurningCalligraphy) {
+        // Raging Cinnabar Conflagration Ink Puddle
+        drawCircle(
+            color = Color(0xFF3E0000).copy(alpha = 0.65f * lifeRatio),
+            radius = r,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color(0xFFFF3D00).copy(alpha = 0.75f * lifeRatio),
+            radius = r * 0.85f,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color(0xFFFFAB00).copy(alpha = 0.85f * lifeRatio),
+            radius = r * 0.45f,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color(0xFFFFD600).copy(alpha = 0.9f * lifeRatio),
+            radius = r * 0.2f,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color(0xFFFF3D00).copy(alpha = lifeRatio),
+            radius = r,
+            center = Offset(px, py),
+            style = Stroke(width = 3f)
+        )
+    } else {
+        // Standard Sumi-e Ink Puddle
+        drawCircle(
+            color = StarkBlackInk.copy(alpha = 0.25f * lifeRatio),
+            radius = r,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = StarkBlackInk.copy(alpha = 0.65f * lifeRatio),
+            radius = r * 0.65f,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = StarkBlackInk.copy(alpha = 0.85f * lifeRatio),
+            radius = r * 0.28f,
+            center = Offset(px, py)
+        )
+    }
 }
 
 // Wash Brush sweep arc visual
@@ -476,7 +697,7 @@ private fun DrawScope.drawOrb(orb: Orb, camX: Float, camY: Float) {
     if (orb.isCondensed) {
         val pulse = sin(orb.pulseTimer * 6f) * 3f
         drawCircle(
-            color = Color(0xFFFFD54F).copy(alpha = 0.4f),
+            color = Color(0xFFFFD54F).copy(alpha = 0.45f),
             radius = 18f + pulse,
             center = Offset(ox, oy)
         )
@@ -496,16 +717,74 @@ private fun DrawScope.drawOrb(orb: Orb, camX: Float, camY: Float) {
             center = Offset(ox - 2f, oy - 2f)
         )
     } else {
-        drawCircle(
-            color = StarkBlackInk,
-            radius = 6.5f,
-            center = Offset(ox, oy)
-        )
-        drawCircle(
-            color = Color.White,
-            radius = 2f,
-            center = Offset(ox - 1.5f, oy - 1.5f)
-        )
+        when (orb.tier) {
+            3 -> {
+                // Tier 3: Radiant Celestial Jade / Azure Ink Orb (Unlocked 25m+)
+                val pulse = sin(orb.pulseTimer * 8f) * 2.5f
+                drawCircle(
+                    color = Color(0xFF00E5FF).copy(alpha = 0.35f),
+                    radius = 13f + pulse,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = Color(0xFF00B0FF),
+                    radius = 8.5f,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = Color(0xFFFFD54F),
+                    radius = 5f,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 2.2f,
+                    center = Offset(ox - 1.5f, oy - 1.5f)
+                )
+            }
+            2 -> {
+                // Tier 2: Refined Cinnabar Ink Orb (Unlocked 25m+ or higher-tier paper horrors)
+                val pulse = sin(orb.pulseTimer * 6f) * 1.8f
+                drawCircle(
+                    color = Color(0xFFFF3D00).copy(alpha = 0.3f),
+                    radius = 10f + pulse,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = Color(0xFFD50000),
+                    radius = 7.5f,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = StarkBlackInk,
+                    radius = 4f,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = Color(0xFFFF8A80),
+                    radius = 1.8f,
+                    center = Offset(ox - 1.2f, oy - 1.2f)
+                )
+            }
+            else -> {
+                // Tier 1: Small classic pitch-black sumi-e droplet (lowest tier enemies)
+                drawCircle(
+                    color = StarkBlackInk.copy(alpha = 0.22f),
+                    radius = 8.5f,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = StarkBlackInk,
+                    radius = 6f,
+                    center = Offset(ox, oy)
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 1.8f,
+                    center = Offset(ox - 1.5f, oy - 1.5f)
+                )
+            }
+        }
     }
 }
 
@@ -527,78 +806,141 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float, time: Fl
 
     when (enemy.type) {
         EnemyType.BASIC_CONSTRUCT -> {
-            val path = Path().apply {
-                moveTo(ex, ey - r)
-                lineTo(ex + r, ey)
-                lineTo(ex, ey + r)
-                lineTo(ex - r, ey)
-                close()
+            // Faceted origami diamond with 4 folded planes & subtle shadow
+            val facet1 = Path().apply { moveTo(ex, ey - r); lineTo(ex, ey); lineTo(ex - r, ey); close() }
+            val facet2 = Path().apply { moveTo(ex, ey - r); lineTo(ex + r, ey); lineTo(ex, ey); close() }
+            val facet3 = Path().apply { moveTo(ex, ey); lineTo(ex + r, ey); lineTo(ex, ey + r); close() }
+            val facet4 = Path().apply { moveTo(ex - r, ey); lineTo(ex, ey); lineTo(ex, ey + r); close() }
+
+            val shadowShade = if (enemy.isElite) Color(0xFF6B0909) else Color(0xFFE5E5E5)
+            val litShade = if (enemy.isElite) EliteCrimsonFill else PaperConstructFill
+
+            drawPath(facet1, litShade)
+            drawPath(facet2, shadowShade)
+            drawPath(facet3, litShade)
+            drawPath(facet4, shadowShade)
+
+            // Outer sumi-e boundary
+            val fullDiamond = Path().apply {
+                moveTo(ex, ey - r); lineTo(ex + r, ey); lineTo(ex, ey + r); lineTo(ex - r, ey); close()
             }
-            drawPath(path = path, color = fillColor)
-            drawPath(path = path, color = outlineColor, style = Stroke(width = outlineWidth))
-            drawLine(outlineColor, Offset(ex, ey - r), Offset(ex, ey + r), strokeWidth = 1.5f)
-            drawCircle(color = eyeColor, radius = if (enemy.isElite) 5.5f else 3.5f, center = Offset(ex, ey))
+            drawPath(fullDiamond, outlineColor, style = Stroke(width = outlineWidth))
+
+            // Internal paper crease lines
+            drawLine(outlineColor.copy(alpha = 0.6f), Offset(ex, ey - r), Offset(ex, ey + r), strokeWidth = 1.8f)
+            drawLine(outlineColor.copy(alpha = 0.6f), Offset(ex - r, ey), Offset(ex + r, ey), strokeWidth = 1.8f)
+
+            // Demonic core / occult paper eye
+            drawCircle(color = StarkBlackInk, radius = if (enemy.isElite) 6.5f else 4.5f, center = Offset(ex, ey))
+            drawCircle(color = eyeColor, radius = if (enemy.isElite) 4.5f else 3f, center = Offset(ex, ey))
+            drawCircle(color = Color.White, radius = 1.2f, center = Offset(ex - 1f, ey - 1f))
         }
 
         EnemyType.FOLDED_STALKER -> {
-            val path = Path().apply {
-                moveTo(ex, ey - r * 1.3f)
-                lineTo(ex + r * 1.2f, ey + r * 0.9f)
+            // Origami raptor/crane: sweeping wing planes with crease shading
+            val leftWing = Path().apply {
+                moveTo(ex, ey - r * 1.35f)
                 lineTo(ex, ey + r * 0.4f)
-                lineTo(ex - r * 1.2f, ey + r * 0.9f)
+                lineTo(ex - r * 1.25f, ey + r * 0.95f)
                 close()
             }
-            drawPath(path = path, color = fillColor)
-            drawPath(path = path, color = outlineColor, style = Stroke(width = outlineWidth))
-            drawCircle(color = eyeColor, radius = if (enemy.isElite) 6f else 4f, center = Offset(ex, ey - r * 0.3f))
+            val rightWing = Path().apply {
+                moveTo(ex, ey - r * 1.35f)
+                lineTo(ex + r * 1.25f, ey + r * 0.95f)
+                lineTo(ex, ey + r * 0.4f)
+                close()
+            }
+            val stalkerShadow = if (enemy.isElite) Color(0xFF720D0D) else Color(0xFFDEDBD2)
+            drawPath(leftWing, stalkerShadow)
+            drawPath(rightWing, fillColor)
+
+            val fullStalker = Path().apply {
+                moveTo(ex, ey - r * 1.35f)
+                lineTo(ex + r * 1.25f, ey + r * 0.95f)
+                lineTo(ex, ey + r * 0.4f)
+                lineTo(ex - r * 1.25f, ey + r * 0.95f)
+                close()
+            }
+            drawPath(fullStalker, outlineColor, style = Stroke(width = outlineWidth))
+
+            // Spine crease and wing ribs
+            drawLine(outlineColor, Offset(ex, ey - r * 1.35f), Offset(ex, ey + r * 0.4f), strokeWidth = 2.2f)
+            drawLine(outlineColor.copy(alpha = 0.5f), Offset(ex, ey - r * 0.6f), Offset(ex - r * 0.8f, ey + r * 0.5f), strokeWidth = 1.5f)
+            drawLine(outlineColor.copy(alpha = 0.5f), Offset(ex, ey - r * 0.6f), Offset(ex + r * 0.8f, ey + r * 0.5f), strokeWidth = 1.5f)
+
+            // Sharp predatory paper eye
+            drawCircle(color = StarkBlackInk, radius = if (enemy.isElite) 6.5f else 4.5f, center = Offset(ex, ey - r * 0.35f))
+            drawCircle(color = eyeColor, radius = if (enemy.isElite) 4.5f else 3f, center = Offset(ex, ey - r * 0.35f))
         }
 
         EnemyType.PAPER_BRUTE -> {
-            val path = Path().apply {
-                moveTo(ex, ey - r)
-                lineTo(ex + r * 0.9f, ey - r * 0.5f)
-                lineTo(ex + r * 0.9f, ey + r * 0.5f)
-                lineTo(ex, ey + r)
-                lineTo(ex - r * 0.9f, ey + r * 0.5f)
-                lineTo(ex - r * 0.9f, ey - r * 0.5f)
+            // Heavy armored origami golem with layered hexagonal shoulder plates
+            val brutePath = Path().apply {
+                moveTo(ex, ey - r * 1.05f)
+                lineTo(ex + r * 0.95f, ey - r * 0.55f)
+                lineTo(ex + r * 0.95f, ey + r * 0.55f)
+                lineTo(ex, ey + r * 1.05f)
+                lineTo(ex - r * 0.95f, ey + r * 0.55f)
+                lineTo(ex - r * 0.95f, ey - r * 0.55f)
                 close()
             }
-            drawPath(path = path, color = fillColor)
-            drawPath(path = path, color = outlineColor, style = Stroke(width = outlineWidth + 1f))
-            drawCircle(color = eyeColor, radius = 7f, center = Offset(ex, ey))
+            drawPath(brutePath, fillColor)
+            drawPath(brutePath, outlineColor, style = Stroke(width = outlineWidth + 1.2f))
+
+            // Armored chest fold plate
+            val chestFold = Path().apply {
+                moveTo(ex - r * 0.6f, ey - r * 0.4f)
+                lineTo(ex + r * 0.6f, ey - r * 0.4f)
+                lineTo(ex, ey + r * 0.4f)
+                close()
+            }
+            drawPath(chestFold, if (enemy.isElite) Color(0xFF5A0000) else Color(0xFFD6D6D6))
+            drawPath(chestFold, outlineColor, style = Stroke(width = 1.8f))
+
+            // Glowing brute eye slit
+            drawCircle(color = StarkBlackInk, radius = 8.5f, center = Offset(ex, ey))
+            drawCircle(color = eyeColor, radius = 5.5f, center = Offset(ex, ey))
+            drawCircle(color = Color.White, radius = 2f, center = Offset(ex - 1.5f, ey - 1.5f))
         }
 
         EnemyType.THE_TITAN -> {
             val path = Path().apply {
                 moveTo(ex, ey - r)
-                lineTo(ex + r * 0.7f, ey - r * 0.6f)
+                lineTo(ex + r * 0.75f, ey - r * 0.65f)
                 lineTo(ex + r, ey)
-                lineTo(ex + r * 0.8f, ey + r * 0.7f)
+                lineTo(ex + r * 0.85f, ey + r * 0.75f)
                 lineTo(ex, ey + r)
-                lineTo(ex - r * 0.8f, ey + r * 0.7f)
+                lineTo(ex - r * 0.85f, ey + r * 0.75f)
                 lineTo(ex - r, ey)
-                lineTo(ex - r * 0.7f, ey - r * 0.6f)
+                lineTo(ex - r * 0.75f, ey - r * 0.65f)
                 close()
             }
             drawPath(path = path, color = fillColor)
-            drawPath(path = path, color = outlineColor, style = Stroke(width = outlineWidth + 2f))
+            drawPath(path = path, color = outlineColor, style = Stroke(width = outlineWidth + 2.5f))
 
-            drawLine(outlineColor, Offset(ex, ey - r), Offset(ex, ey + r), strokeWidth = 2f)
-            drawLine(outlineColor, Offset(ex - r, ey), Offset(ex + r, ey), strokeWidth = 2f)
-            drawLine(outlineColor, Offset(ex - r * 0.7f, ey - r * 0.6f), Offset(ex + r * 0.7f, ey + r * 0.7f), strokeWidth = 1.5f)
-            drawLine(outlineColor, Offset(ex + r * 0.7f, ey - r * 0.6f), Offset(ex - r * 0.7f, ey + r * 0.7f), strokeWidth = 1.5f)
+            // Rotating runic ring around Titan
+            val ringAngle = time * 2.5f
+            for (k in 0..7) {
+                val a = ringAngle + (k * PI / 4).toFloat()
+                val rx = ex + cos(a) * (r * 0.85f)
+                val ry = ey + sin(a) * (r * 0.85f)
+                drawCircle(color = EliteCrimsonOutline, radius = 4f, center = Offset(rx, ry))
+            }
+
+            drawLine(outlineColor, Offset(ex, ey - r), Offset(ex, ey + r), strokeWidth = 2.5f)
+            drawLine(outlineColor, Offset(ex - r, ey), Offset(ex + r, ey), strokeWidth = 2.5f)
 
             // Boss Core & Eye
-            drawCircle(color = outlineColor, radius = 14f, center = Offset(ex, ey))
-            drawCircle(color = eyeColor, radius = 9f, center = Offset(ex, ey))
-            drawCircle(color = Color.White, radius = 3.5f, center = Offset(ex - 2f, ey - 2f))
+            drawCircle(color = outlineColor, radius = 16f, center = Offset(ex, ey))
+            drawCircle(color = eyeColor, radius = 11f, center = Offset(ex, ey))
+            drawCircle(color = Color.White, radius = 4f, center = Offset(ex - 2.5f, ey - 2.5f))
 
             // Boss Health Bar above Titan
-            val barW = 110f
-            val barH = 10f
-            val barY = ey - r - 22f
+            val barW = 120f
+            val barH = 11f
+            val barY = ey - r - 24f
             drawRect(
-                color = Color(0x88000000),
+                color = Color(0xAA000000),
                 topLeft = Offset(ex - barW / 2f, barY),
                 size = androidx.compose.ui.geometry.Size(barW, barH)
             )
@@ -607,6 +949,12 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float, time: Fl
                 color = Color(0xFFD32F2F),
                 topLeft = Offset(ex - barW / 2f, barY),
                 size = androidx.compose.ui.geometry.Size(barW * hpRatio, barH)
+            )
+            drawRect(
+                color = Color.White,
+                topLeft = Offset(ex - barW / 2f, barY),
+                size = androidx.compose.ui.geometry.Size(barW, barH),
+                style = Stroke(width = 1.5f)
             )
         }
 
@@ -626,7 +974,7 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float, time: Fl
             // Scroll bindings & rune lines
             drawLine(outlineColor, Offset(ex - r * 0.7f, ey - r * 0.2f), Offset(ex + r * 0.7f, ey - r * 0.2f), strokeWidth = 2.5f)
             drawLine(outlineColor, Offset(ex - r * 0.6f, ey + r * 0.3f), Offset(ex + r * 0.6f, ey + r * 0.3f), strokeWidth = 2.5f)
-            drawCircle(color = Color(0xFF00E676), radius = 11f, center = Offset(ex, ey - 4f))
+            drawCircle(color = Color(0xFF00E676), radius = 12f, center = Offset(ex, ey - 4f))
             drawCircle(color = Color.White, radius = 4f, center = Offset(ex - 2f, ey - 6f))
 
             // Boss Health Bar
@@ -648,7 +996,6 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float, time: Fl
                 lineTo(ex - r * 1.15f, ey + r * 0.8f)
                 close()
             }
-            // Sponge fill
             drawPath(path = path, color = Color(0xFFE0F2F1))
             drawPath(path = path, color = Color(0xFF00796B), style = Stroke(width = outlineWidth + 1.5f))
 
@@ -726,6 +1073,75 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float, time: Fl
             radius = r * 1.15f,
             center = Offset(ex, ey + 4f),
             style = Stroke(width = 2.5f)
+        )
+    }
+
+    // Frozen Solid in Black Ice (Immobilized & +60% shatter vulnerability)
+    if (enemy.frozenSolidTimer > 0f) {
+        val iceAlpha = (enemy.frozenSolidTimer / 3.0f).coerceIn(0.4f, 0.95f)
+        drawCircle(
+            color = Color(0xFF001F3F).copy(alpha = iceAlpha * 0.5f),
+            radius = r * 1.35f,
+            center = Offset(ex, ey)
+        )
+        drawCircle(
+            color = Color(0xFF00E5FF).copy(alpha = iceAlpha * 0.9f),
+            radius = r * 1.35f,
+            center = Offset(ex, ey),
+            style = Stroke(width = 3.5f)
+        )
+        // Cryo crystalline fracture lines
+        drawLine(Color.White.copy(alpha = iceAlpha), Offset(ex - r, ey - r * 0.5f), Offset(ex + r * 0.8f, ey + r * 0.6f), strokeWidth = 2f)
+        drawLine(Color(0xFF80D8FF).copy(alpha = iceAlpha), Offset(ex + r * 0.6f, ey - r * 0.8f), Offset(ex - r * 0.5f, ey + r * 0.7f), strokeWidth = 2f)
+    }
+
+    // Cinnabar Flame burning aura
+    if (enemy.flameTimer > 0f) {
+        val flameAlpha = (enemy.flameTimer / 4.0f).coerceIn(0.35f, 0.9f)
+        drawCircle(
+            color = Color(0xFFFF3D00).copy(alpha = flameAlpha * 0.45f),
+            radius = r * 1.35f,
+            center = Offset(ex, ey)
+        )
+        drawCircle(
+            color = Color(0xFFFFAB00).copy(alpha = flameAlpha),
+            radius = r * 1.25f,
+            center = Offset(ex, ey - 3f),
+            style = Stroke(width = 2.5f)
+        )
+    }
+
+    // Glacial Frost chill ring
+    if (enemy.frostTimer > 0f && enemy.frozenSolidTimer <= 0f) {
+        drawCircle(
+            color = Color(0xFF80D8FF).copy(alpha = 0.6f),
+            radius = r * 1.2f,
+            center = Offset(ex, ey),
+            style = Stroke(width = 2f)
+        )
+    }
+
+    // Corrosive Acid wash soak
+    if (enemy.acidTimer > 0f) {
+        drawCircle(
+            color = Color(0xFF00E676).copy(alpha = 0.55f),
+            radius = r * 1.2f,
+            center = Offset(ex, ey),
+            style = Stroke(width = 2f)
+        )
+    }
+
+    // Cosmic Astral sigil
+    if (enemy.astralTimer > 0f) {
+        val starA = time * 4f
+        val sx = ex + cos(starA) * (r * 1.35f)
+        val sy = ey + sin(starA) * (r * 1.35f)
+        drawCircle(color = Color(0xFFFFD54F), radius = 4f, center = Offset(sx, sy))
+        drawCircle(
+            color = Color(0xFFFFD54F).copy(alpha = 0.45f),
+            radius = r * 1.35f,
+            center = Offset(ex, ey),
+            style = Stroke(width = 1.5f)
         )
     }
 }
@@ -945,6 +1361,318 @@ private fun DrawScope.drawMagnumOpusEffect(visual: MagnumOpusVisual) {
     )
 }
 
+// Draw elemental particles (ice crystal shards, fiery embers, cosmic motes)
+private fun DrawScope.drawElementalParticle(part: ElementalParticle, camX: Float, camY: Float) {
+    val px = part.x + camX
+    val py = part.y + camY
+    val lifeRatio = (part.life / part.maxLife).coerceIn(0f, 1f)
+
+    if (part.isShard) {
+        rotate(degrees = part.angle, pivot = Offset(px, py)) {
+            val halfS = (part.size * lifeRatio) * 0.5f
+            val shardPath = Path().apply {
+                moveTo(px, py - halfS * 1.5f)
+                lineTo(px + halfS * 0.7f, py)
+                lineTo(px, py + halfS * 1.5f)
+                lineTo(px - halfS * 0.7f, py)
+                close()
+            }
+            drawPath(path = shardPath, color = part.color.copy(alpha = lifeRatio))
+            drawPath(path = shardPath, color = Color.White.copy(alpha = lifeRatio * 0.8f), style = Stroke(width = 1.2f))
+        }
+    } else {
+        val radius = part.size * lifeRatio
+        drawCircle(
+            color = part.color.copy(alpha = lifeRatio * 0.75f),
+            radius = radius,
+            center = Offset(px, py)
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = lifeRatio * 0.9f),
+            radius = radius * 0.35f,
+            center = Offset(px, py)
+        )
+    }
+}
+
+// Draw Screen-Filling Elemental Reactions (Frozen Ink, Burning Calligraphy, etc.)
+private fun DrawScope.drawScreenElementalReaction(
+    visual: ScreenElementalReactionVisual,
+    camX: Float,
+    camY: Float
+) {
+    val cx = visual.x + camX
+    val cy = visual.y + camY
+    val progress = visual.progress
+    val currentR = visual.expansionRadius
+    val alpha = (1f - progress).coerceIn(0f, 1f)
+
+    when (visual.reactionType) {
+        ElementalReactionType.FROZEN_INK -> {
+            if (visual.flashAlpha > 0.05f) {
+                drawRect(color = Color(0xFF00E5FF).copy(alpha = visual.flashAlpha * 0.35f))
+            }
+            drawCircle(
+                color = Color(0xFF00E5FF).copy(alpha = alpha * 0.85f),
+                radius = currentR,
+                center = Offset(cx, cy),
+                style = Stroke(width = 4.5f * (1f - progress * 0.5f))
+            )
+            drawCircle(
+                color = Color(0xFF001F3F).copy(alpha = alpha * 0.25f),
+                radius = currentR * 0.85f,
+                center = Offset(cx, cy)
+            )
+            for (i in 0 until 8) {
+                val a = (i * PI / 4).toFloat() + progress * 0.2f
+                val endX = cx + cos(a) * currentR
+                val endY = cy + sin(a) * currentR
+                drawLine(
+                    color = Color(0xFF00E5FF).copy(alpha = alpha),
+                    start = Offset(cx, cy),
+                    end = Offset(endX, endY),
+                    strokeWidth = 2.5f
+                )
+                val midX = cx + cos(a) * (currentR * 0.6f)
+                val midY = cy + sin(a) * (currentR * 0.6f)
+                val branchA = a + 0.35f
+                drawLine(
+                    color = Color.White.copy(alpha = alpha * 0.8f),
+                    start = Offset(midX, midY),
+                    end = Offset(midX + cos(branchA) * (currentR * 0.35f), midY + sin(branchA) * (currentR * 0.35f)),
+                    strokeWidth = 1.8f
+                )
+            }
+            val sealSize = 54f * (1f + progress * 0.3f)
+            drawRect(
+                color = Color(0xFF00E5FF).copy(alpha = alpha * 0.7f),
+                topLeft = Offset(cx - sealSize / 2f, cy - sealSize / 2f),
+                size = androidx.compose.ui.geometry.Size(sealSize, sealSize),
+                style = Stroke(width = 2.5f)
+            )
+        }
+
+        ElementalReactionType.BURNING_CALLIGRAPHY -> {
+            if (visual.flashAlpha > 0.05f) {
+                drawRect(color = Color(0xFFFF3D00).copy(alpha = visual.flashAlpha * 0.40f))
+            }
+            drawCircle(
+                color = Color(0xFFFF3D00).copy(alpha = alpha * 0.9f),
+                radius = currentR,
+                center = Offset(cx, cy),
+                style = Stroke(width = 6f * (1f - progress * 0.5f))
+            )
+            drawCircle(
+                color = Color(0xFFFFAB00).copy(alpha = alpha * 0.7f),
+                radius = currentR * 0.75f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 4f)
+            )
+            drawCircle(
+                color = Color(0xFFD50000).copy(alpha = alpha * 0.25f),
+                radius = currentR * 0.6f,
+                center = Offset(cx, cy)
+            )
+            for (i in 0 until 6) {
+                val a = (i * PI / 3).toFloat() + progress * 0.8f
+                val flamePath = Path().apply {
+                    moveTo(cx, cy)
+                    quadraticTo(
+                        cx + cos(a + 0.4f) * (currentR * 0.65f),
+                        cy + sin(a + 0.4f) * (currentR * 0.65f),
+                        cx + cos(a) * currentR,
+                        cy + sin(a) * currentR
+                    )
+                }
+                drawPath(path = flamePath, color = Color(0xFFFFD600).copy(alpha = alpha), style = Stroke(width = 3.5f, cap = StrokeCap.Round))
+            }
+            val sealSize = 60f
+            drawRect(
+                color = Color(0xFFD50000).copy(alpha = alpha * 0.85f),
+                topLeft = Offset(cx - sealSize / 2f, cy - sealSize / 2f),
+                size = androidx.compose.ui.geometry.Size(sealSize, sealSize)
+            )
+            drawRect(
+                color = Color(0xFFFFD600).copy(alpha = alpha),
+                topLeft = Offset(cx - sealSize / 2f, cy - sealSize / 2f),
+                size = androidx.compose.ui.geometry.Size(sealSize, sealSize),
+                style = Stroke(width = 2.5f)
+            )
+        }
+
+        ElementalReactionType.COSMIC_SUPERNOVA -> {
+            if (visual.flashAlpha > 0.05f) {
+                drawRect(color = Color(0xFFFFD54F).copy(alpha = visual.flashAlpha * 0.45f))
+            }
+            drawCircle(
+                color = Color(0xFFFFD54F).copy(alpha = alpha * 0.9f),
+                radius = currentR,
+                center = Offset(cx, cy),
+                style = Stroke(width = 5f)
+            )
+            drawCircle(
+                color = Color(0xFF7C4DFF).copy(alpha = alpha * 0.75f),
+                radius = currentR * 0.5f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 3.5f)
+            )
+            for (i in 0 until 12) {
+                val a = (i * PI / 6).toFloat()
+                val len = if (i % 2 == 0) currentR else currentR * 0.7f
+                drawLine(
+                    color = Color(0xFFFFEA00).copy(alpha = alpha),
+                    start = Offset(cx, cy),
+                    end = Offset(cx + cos(a) * len, cy + sin(a) * len),
+                    strokeWidth = if (i % 2 == 0) 3.5f else 1.8f,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+
+        ElementalReactionType.PERMAFROST_BLOSSOM -> {
+            if (visual.flashAlpha > 0.05f) {
+                drawRect(color = Color(0xFF80D8FF).copy(alpha = visual.flashAlpha * 0.35f))
+            }
+            for (i in 0 until 6) {
+                val a = (i * PI / 3).toFloat() + progress * 0.15f
+                val tipX = cx + cos(a) * currentR
+                val tipY = cy + sin(a) * currentR
+                drawLine(
+                    color = Color(0xFF80D8FF).copy(alpha = alpha),
+                    start = Offset(cx, cy),
+                    end = Offset(tipX, tipY),
+                    strokeWidth = 3f
+                )
+                for (b in 1..3) {
+                    val branchDist = currentR * (b * 0.28f)
+                    val bx = cx + cos(a) * branchDist
+                    val by = cy + sin(a) * branchDist
+                    val branchLen = currentR * 0.18f
+                    drawLine(
+                        color = Color.White.copy(alpha = alpha * 0.85f),
+                        start = Offset(bx, by),
+                        end = Offset(bx + cos(a + 0.6f) * branchLen, by + sin(a + 0.6f) * branchLen),
+                        strokeWidth = 1.8f
+                    )
+                    drawLine(
+                        color = Color.White.copy(alpha = alpha * 0.85f),
+                        start = Offset(bx, by),
+                        end = Offset(bx + cos(a - 0.6f) * branchLen, by + sin(a - 0.6f) * branchLen),
+                        strokeWidth = 1.8f
+                    )
+                }
+            }
+            drawCircle(
+                color = Color(0xFF80D8FF).copy(alpha = alpha * 0.6f),
+                radius = currentR * 0.65f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 2f)
+            )
+        }
+
+        ElementalReactionType.THERMAL_SHOCK -> {
+            val leftPath = Path().apply {
+                arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(cx - currentR, cy - currentR, cx + currentR, cy + currentR),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = 180f,
+                    forceMoveTo = true
+                )
+            }
+            drawPath(path = leftPath, color = Color(0xFFFF1744).copy(alpha = alpha * 0.9f), style = Stroke(width = 5f))
+
+            val rightPath = Path().apply {
+                arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(cx - currentR, cy - currentR, cx + currentR, cy + currentR),
+                    startAngleDegrees = 270f,
+                    sweepAngleDegrees = 180f,
+                    forceMoveTo = true
+                )
+            }
+            drawPath(path = rightPath, color = Color(0xFF00E5FF).copy(alpha = alpha * 0.9f), style = Stroke(width = 5f))
+
+            drawCircle(
+                color = Color.White.copy(alpha = alpha * 0.5f),
+                radius = currentR * 0.5f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 8f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ElementalReactionBanner(
+    reaction: ElementalReactionType,
+    modifier: Modifier = Modifier
+) {
+    val primaryColor = Color(reaction.primaryColorHex)
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xE60A0A0E))
+            .border(1.5.dp, primaryColor, RoundedCornerShape(8.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .shadow(12.dp, RoundedCornerShape(8.dp))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color(0xFFD32F2F), RoundedCornerShape(4.dp))
+                    .border(1.dp, Color(0xFFFFCDD2), RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = reaction.kanjiStamps.take(2),
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Serif
+                )
+            }
+
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = reaction.title,
+                        color = primaryColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .background(primaryColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                            .border(0.5.dp, primaryColor, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "COMBO REACTION",
+                            color = Color.White,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                Text(
+                    text = reaction.subtitle,
+                    color = Color(0xFFECEFF1),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
 private fun DrawScope.drawPlayerCharacter(
     x: Float,
     y: Float,
@@ -956,96 +1684,284 @@ private fun DrawScope.drawPlayerCharacter(
 ) {
     val alpha = if (isInvincible) (0.4f + 0.4f * kotlin.math.abs(sin(time * 20f))) else 1f
 
-    // 1. Dynamic ground shadow
-    val shadowPulse = 24f + sin(time * 6f) * 1.5f
+    // 1. Dynamic Calligraphic Ground Shadow with breathing ink aura
+    val shadowPulse = 26f + sin(time * 6f) * 2f
     drawCircle(
-        color = StarkBlackInk.copy(alpha = 0.14f * alpha),
+        color = StarkBlackInk.copy(alpha = 0.16f * alpha),
         radius = shadowPulse,
-        center = Offset(x, y + 5f)
+        center = Offset(x, y + 6f)
     )
 
-    // 2. Health ring indicator around hero feet
+    // Outer faint ink mist aura around hero
+    val auraPulse = 34f + sin(time * 4f) * 3f
+    drawCircle(
+        color = (if (isPainter) Color(0xFF00E5FF) else Color(0xFFFFD700)).copy(alpha = 0.08f * alpha),
+        radius = auraPulse,
+        center = Offset(x, y)
+    )
+
+    // 2. Health ring indicator around hero feet with brush-styled bristle tips
     val ringColor = if (hpRatio < 0.30f) {
-        val blinkAlpha = 0.4f + 0.6f * kotlin.math.abs(sin(time * 10f))
+        val blinkAlpha = 0.45f + 0.55f * kotlin.math.abs(sin(time * 10f))
         Color(0xFFD32F2F).copy(alpha = blinkAlpha)
     } else {
-        Color(0xFF2E7D32).copy(alpha = 0.75f)
+        Color(0xFF2E7D32).copy(alpha = 0.85f)
     }
     drawArc(
         color = ringColor,
         startAngle = -90f,
         sweepAngle = hpRatio * 360f,
         useCenter = false,
-        topLeft = Offset(x - 22f, y - 22f),
-        size = androidx.compose.ui.geometry.Size(44f, 44f),
-        style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+        topLeft = Offset(x - 24f, y - 24f),
+        size = androidx.compose.ui.geometry.Size(48f, 48f),
+        style = Stroke(width = 3f, cap = StrokeCap.Round)
     )
 
-    // 3. Dynamic calligraphic ink ribbons trailing behind hero
+    // 3. Dynamic calligraphic ink ribbons & robe tails trailing behind hero
     val ribbonAngle = facingAngle + PI.toFloat()
-    for (i in -1..1) {
-        val waveOffset = sin(time * 12f + i * 1.2f) * 5f
-        val rAngle = ribbonAngle + (i * 0.16f)
+    for (i in -2..2) {
+        val waveOffset = sin(time * 12f + i * 0.9f) * (6f + kotlin.math.abs(i) * 2f)
+        val rAngle = ribbonAngle + (i * 0.18f)
+        val rDist = 34f - kotlin.math.abs(i) * 4f
         val rEnd = Offset(
-            x + cos(rAngle) * 32f - sin(rAngle) * waveOffset,
-            y + sin(rAngle) * 32f + cos(rAngle) * waveOffset
+            x + cos(rAngle) * rDist - sin(rAngle) * waveOffset,
+            y + sin(rAngle) * rDist + cos(rAngle) * waveOffset
         )
+        // Shaded ribbon with calligraphic taper
         drawLine(
-            color = StarkBlackInk.copy(alpha = (0.7f - kotlin.math.abs(i) * 0.25f) * alpha),
+            color = StarkBlackInk.copy(alpha = (0.75f - kotlin.math.abs(i) * 0.18f) * alpha),
             start = Offset(x, y),
             end = rEnd,
-            strokeWidth = if (i == 0) 5.5f else 3.5f,
+            strokeWidth = (6.5f - kotlin.math.abs(i) * 1.2f),
             cap = StrokeCap.Round
         )
     }
 
-    // 4. Hero body with dynamic breathing bob
-    val bobY = sin(time * 8f) * 1.8f
+    // 4. Hero body with dynamic breathing bob & layered robes
+    val bobY = sin(time * 8f) * 2f
     val cy = y + bobY
+
+    // Outer dark robe mantle
     drawCircle(
         color = StarkBlackInk.copy(alpha = alpha),
-        radius = 18f,
+        radius = 20f,
         center = Offset(x, cy)
     )
+    // Inner tunic / parchment collar
     drawCircle(
-        color = Color(0xFF262626).copy(alpha = alpha),
-        radius = 13f,
+        color = (if (isPainter) Color(0xFF1E3A3A) else Color(0xFF2A231C)).copy(alpha = alpha),
+        radius = 15f,
         center = Offset(x, cy - 3f)
+    )
+    // Golden or Azure seal clasp on chest
+    val claspColor = if (isPainter) Color(0xFF00E5FF) else Color(0xFFFFD700)
+    drawCircle(
+        color = claspColor.copy(alpha = alpha),
+        radius = 4f,
+        center = Offset(x, cy - 1f)
     )
 
     // 5. Dynamic Weapon (Quill / Brush) with organic sway and wet ink tip
-    val swayAngle = facingAngle + sin(time * 7f) * 0.12f
+    val swayAngle = facingAngle + sin(time * 7f) * 0.14f
     if (isPainter) {
-        val brushTip = Offset(x + cos(swayAngle) * 28f, cy + sin(swayAngle) * 28f)
+        // Painter's heavy calligraphy wash brush
+        val brushTip = Offset(x + cos(swayAngle) * 32f, cy + sin(swayAngle) * 32f)
+        // Bamboo handle
         drawLine(
-            color = StarkBlackInk.copy(alpha = alpha),
+            color = Color(0xFF5D4037).copy(alpha = alpha),
             start = Offset(x, cy),
             end = brushTip,
-            strokeWidth = 7f,
+            strokeWidth = 6.5f,
             cap = StrokeCap.Round
         )
-        val dropPulse = 3.5f + sin(time * 14f) * 1f
+        // Black horsehair bristle bundle
+        val bristleTip = Offset(x + cos(swayAngle) * 38f, cy + sin(swayAngle) * 38f)
+        drawLine(
+            color = StarkBlackInk.copy(alpha = alpha),
+            start = brushTip,
+            end = bristleTip,
+            strokeWidth = 9f,
+            cap = StrokeCap.Round
+        )
+        // Vibrant cyan wet ink droplet that pulses
+        val dropPulse = 4.2f + sin(time * 14f) * 1.2f
         drawCircle(
             color = Color(0xFF00E5FF),
             radius = dropPulse,
-            center = brushTip
+            center = bristleTip
+        )
+        drawCircle(
+            color = Color.White,
+            radius = 1.8f,
+            center = Offset(bristleTip.x - 1f, bristleTip.y - 1f)
         )
     } else {
-        val quillTip = Offset(x + cos(swayAngle) * 26f, cy + sin(swayAngle) * 26f)
+        // Calligrapher's sharp sumi-e quill
+        val quillTip = Offset(x + cos(swayAngle) * 30f, cy + sin(swayAngle) * 30f)
+        // Quill spine
         drawLine(
-            color = StarkBlackInk.copy(alpha = alpha),
+            color = Color(0xFFECEFF1).copy(alpha = alpha),
             start = Offset(x, cy),
             end = quillTip,
             strokeWidth = 4f,
             cap = StrokeCap.Round
         )
-        val dropPulse = 2.5f + sin(time * 14f) * 0.8f
+        // Gold nib with ink reservoir
+        val nibEnd = Offset(x + cos(swayAngle) * 34f, cy + sin(swayAngle) * 34f)
+        drawLine(
+            color = Color(0xFFFFD700).copy(alpha = alpha),
+            start = quillTip,
+            end = nibEnd,
+            strokeWidth = 3f,
+            cap = StrokeCap.Square
+        )
+        val dropPulse = 3.2f + sin(time * 14f) * 1f
         drawCircle(
-            color = Color(0xFFFFD700),
+            color = StarkBlackInk,
             radius = dropPulse,
-            center = quillTip
+            center = nibEnd
         )
     }
+}
+
+// ---------------- PLAYER MOTION TRAIL RENDERER ----------------
+
+private fun DrawScope.drawPlayerMotionTrail(trail: PlayerMotionTrailNode, camX: Float, camY: Float) {
+    val tx = trail.x + camX
+    val ty = trail.y + camY
+    val progress = (trail.life / trail.maxLife).coerceIn(0f, 1f)
+    if (progress <= 0.01f) return
+
+    val currentWidth = trail.width * progress
+    val alpha = (progress * 0.72f).coerceIn(0f, 0.72f)
+
+    // Calligraphic brush stroke oriented along movement angle
+    val perpAngle = trail.angle + (PI / 2).toFloat()
+    val dx = cos(perpAngle) * (currentWidth * 0.5f)
+    val dy = sin(perpAngle) * (currentWidth * 0.5f)
+
+    // Soft outer ink bleed
+    drawLine(
+        color = StarkBlackInk.copy(alpha = alpha * 0.35f),
+        start = Offset(tx - dx * 1.35f, ty - dy * 1.35f),
+        end = Offset(tx + dx * 1.35f, ty + dy * 1.35f),
+        strokeWidth = 7f * progress,
+        cap = StrokeCap.Round
+    )
+
+    // Dense black saturated core stroke
+    drawLine(
+        color = StarkBlackInk.copy(alpha = alpha),
+        start = Offset(tx - dx, ty - dy),
+        end = Offset(tx + dx, ty + dy),
+        strokeWidth = 4f * progress,
+        cap = StrokeCap.Round
+    )
+
+    // Faint trailing capillary droplet
+    if (progress > 0.35f) {
+        val dropDist = (1f - progress) * 14f
+        drawCircle(
+            color = StarkBlackInk.copy(alpha = alpha * 0.55f),
+            radius = 2.8f * progress,
+            center = Offset(tx - cos(trail.angle) * dropDist, ty - sin(trail.angle) * dropDist)
+        )
+    }
+}
+
+// ---------------- FLOWING INK SERPENT RENDERER ----------------
+
+private fun DrawScope.drawFlowingSerpent(serpent: FlowingSerpentEntity, camX: Float, camY: Float) {
+    val sx = serpent.x + camX
+    val sy = serpent.y + camY
+    val lifeRatio = (serpent.life / serpent.maxLife).coerceIn(0f, 1f)
+    val alpha = (lifeRatio * 0.95f).coerceIn(0f, 1f)
+
+    // 1. Draw flowing body segments from tail to head
+    val segCount = serpent.segments.size
+    for (i in (segCount - 1) downTo 0) {
+        val seg = serpent.segments[i]
+        val segX = seg.x + camX
+        val segY = seg.y + camY
+        val t = 1f - (i.toFloat() / segCount.coerceAtLeast(1))
+        val segRadius = (serpent.radius * (0.35f + 0.65f * t) * lifeRatio).coerceAtLeast(3f)
+
+        // Toxic dark ink ripple
+        drawCircle(
+            color = Color(0xFF0D1B1E).copy(alpha = alpha * 0.55f * t),
+            radius = segRadius * 1.35f,
+            center = Offset(segX, segY)
+        )
+        // Solid black ink body segment
+        drawCircle(
+            color = StarkBlackInk.copy(alpha = alpha * (0.5f + 0.5f * t)),
+            radius = segRadius,
+            center = Offset(segX, segY)
+        )
+        // Emerald/jade fluid spine scale
+        if (i % 2 == 0) {
+            drawCircle(
+                color = Color(0xFF00E676).copy(alpha = alpha * 0.75f * t),
+                radius = segRadius * 0.35f,
+                center = Offset(segX, segY)
+            )
+        }
+    }
+
+    // 2. Draw Serpent Head
+    val headRadius = serpent.radius * lifeRatio
+    // Outer mist aura
+    drawCircle(
+        color = Color(0xFF004D40).copy(alpha = alpha * 0.4f),
+        radius = headRadius * 1.45f,
+        center = Offset(sx, sy)
+    )
+    // Dark core head
+    drawCircle(
+        color = StarkBlackInk.copy(alpha = alpha),
+        radius = headRadius,
+        center = Offset(sx, sy)
+    )
+
+    // Dragon eye
+    val eyeAngle = serpent.currentAngle + 0.3f
+    val eyeDist = headRadius * 0.55f
+    val eyePos = Offset(sx + cos(eyeAngle) * eyeDist, sy + sin(eyeAngle) * eyeDist)
+    drawCircle(
+        color = Color(0xFF00E676).copy(alpha = alpha),
+        radius = 4f * lifeRatio,
+        center = eyePos
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = alpha),
+        radius = 1.8f * lifeRatio,
+        center = eyePos
+    )
+
+    // Flowing ink whiskers / barbels
+    val whiskerWiggle = sin(serpent.waveTimer * 14f) * 6f
+    val wAngle1 = serpent.currentAngle + 2.2f
+    val wAngle2 = serpent.currentAngle - 2.2f
+    drawLine(
+        color = StarkBlackInk.copy(alpha = alpha * 0.8f),
+        start = Offset(sx, sy),
+        end = Offset(
+            sx + cos(wAngle1) * (headRadius * 1.8f) - sin(wAngle1) * whiskerWiggle,
+            sy + sin(wAngle1) * (headRadius * 1.8f) + cos(wAngle1) * whiskerWiggle
+        ),
+        strokeWidth = 2.5f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = StarkBlackInk.copy(alpha = alpha * 0.8f),
+        start = Offset(sx, sy),
+        end = Offset(
+            sx + cos(wAngle2) * (headRadius * 1.8f) + sin(wAngle2) * whiskerWiggle,
+            sy + sin(wAngle2) * (headRadius * 1.8f) - cos(wAngle2) * whiskerWiggle
+        ),
+        strokeWidth = 2.5f,
+        cap = StrokeCap.Round
+    )
 }
 
 private fun DrawScope.drawDamageNumber(dn: DamageNumber, camX: Float, camY: Float) {
@@ -1075,6 +1991,101 @@ private fun DrawScope.drawDamageNumber(dn: DamageNumber, camX: Float, camY: Floa
             textAlign = android.graphics.Paint.Align.CENTER
         }
         drawText(dn.text, nx, ny, paint)
+    }
+}
+
+// ---------------- FLUID SIMULATION INK SPLASH PARTICLES (CANVAS & SHADERS) ----------------
+
+private fun DrawScope.drawFluidInkSplash(
+    p: InkSplashParticle,
+    camX: Float,
+    camY: Float
+) {
+    val sx = p.x + camX
+    val sy = p.y + camY
+    // Frustum culling
+    if (sx < -60f || sx > size.width + 60f || sy < -60f || sy > size.height + 60f) return
+
+    val lifeAlpha = (p.life / p.maxLife).coerceIn(0f, 1f)
+    val speed = kotlin.math.hypot(p.vx, p.vy)
+    val angle = kotlin.math.atan2(p.vy, p.vx)
+
+    val primaryColor = p.color.copy(alpha = lifeAlpha)
+    val secondaryColor = p.secondaryColor.copy(alpha = lifeAlpha * 0.75f)
+    val rimColor = if (p.isCrit) Color(0xFFFF5252).copy(alpha = lifeAlpha * 0.45f) else Color(0xFF1E1E28).copy(alpha = lifeAlpha * 0.25f)
+
+    // Viscous Fluid Shader: Multi-stop Radial Gradient mimicking dense sumi-e ink droplet diffusion
+    val fluidShaderBrush = Brush.radialGradient(
+        colors = listOf(
+            primaryColor,
+            secondaryColor,
+            rimColor,
+            Color.Transparent
+        ),
+        center = Offset(sx, sy),
+        radius = (p.radius * 1.55f).coerceAtLeast(4f)
+    )
+
+    // When particle is traveling rapidly, simulate aerodynamic fluid droplet elongation & trailing tendril
+    if (speed > 20f) {
+        val stretch = (1f + (speed / 130f)).coerceAtMost(3.2f)
+        val cosA = cos(angle)
+        val sinA = sin(angle)
+
+        val path = Path().apply {
+            val headX = sx + cosA * (p.radius * stretch * 0.6f)
+            val headY = sy + sinA * (p.radius * stretch * 0.6f)
+            val tailX = sx - cosA * (p.radius * stretch * 1.1f)
+            val tailY = sy - sinA * (p.radius * stretch * 1.1f)
+            val perpX = -sinA * p.radius
+            val perpY = cosA * p.radius
+
+            moveTo(headX, headY)
+            quadraticBezierTo(sx + perpX, sy + perpY, tailX, tailY)
+            quadraticBezierTo(sx - perpX, sy - perpY, headX, headY)
+            close()
+        }
+        drawPath(path = path, brush = fluidShaderBrush)
+
+        // Trailing capillary micro-tendril
+        val tendrilLen = p.tendrilLength * lifeAlpha
+        if (tendrilLen > 1f) {
+            val tendrilTailX = sx - cosA * (p.radius * stretch + tendrilLen)
+            val tendrilTailY = sy - sinA * (p.radius * stretch + tendrilLen)
+            drawLine(
+                brush = Brush.linearGradient(
+                    colors = listOf(primaryColor, Color.Transparent),
+                    start = Offset(sx, sy),
+                    end = Offset(tendrilTailX, tendrilTailY)
+                ),
+                start = Offset(sx, sy),
+                end = Offset(tendrilTailX, tendrilTailY),
+                strokeWidth = (p.radius * 0.45f).coerceAtLeast(1.2f),
+                cap = StrokeCap.Round
+            )
+        }
+    } else {
+        // Viscous ink puddle droplet on paper
+        drawCircle(
+            brush = fluidShaderBrush,
+            radius = (p.radius * 1.35f).coerceAtLeast(3f),
+            center = Offset(sx, sy)
+        )
+        // High-density carbon ink core
+        drawCircle(
+            color = primaryColor,
+            radius = (p.radius * 0.68f).coerceAtLeast(1.5f),
+            center = Offset(sx, sy)
+        )
+    }
+
+    // Micro splatter satellite
+    if (p.isCrit) {
+        drawCircle(
+            color = Color(0x55FF1744),
+            radius = (p.radius * 0.45f).coerceAtLeast(1.5f),
+            center = Offset(sx + p.vx * 0.035f, sy + p.vy * 0.035f)
+        )
     }
 }
 
@@ -1121,6 +2132,20 @@ fun VirtualAnalogStick(
                     }
                 )
             },
+        contentAlignment = Alignment.Center
+    ) {
+        OccultCompassDialAndKnob(dragOffset = dragOffset)
+    }
+}
+
+@Composable
+fun OccultCompassDialAndKnob(
+    dragOffset: Offset
+) {
+    Box(
+        modifier = Modifier
+            .size(150.dp)
+            .testTag("virtual_analog_stick"),
         contentAlignment = Alignment.Center
     ) {
         // Occult Inscribed Compass Base Dial
@@ -1667,6 +2692,183 @@ private fun DrawScope.drawOrbitalRune(rune: OrbitalRuneEntity, camX: Float, camY
         color = Color.White,
         radius = 2.5f,
         center = Offset(rx - 1f, ry - 1f)
+    )
+}
+
+// Subtle Elemental Status Effect HUD above the Player Character displaying active stacks
+private fun DrawScope.drawPlayerElementalStatusHud(
+    x: Float,
+    y: Float,
+    elementalStacks: Map<CalligraphicElement, Int>,
+    time: Float
+) {
+    val activeElements = elementalStacks.filter { it.value > 0 }.entries.toList()
+    if (activeElements.isEmpty()) return
+
+    val iconWidth = 32f
+    val totalWidth = activeElements.size * iconWidth
+    val startX = x - (totalWidth / 2f)
+    val floatOffset = kotlin.math.sin(time * 5f) * 2f
+    val hudY = y - 56f + floatOffset
+
+    // 1. Subtle brush-painted parchment pill backing
+    val bgPaddingX = 8f
+    val bgHeight = 22f
+    drawRoundRect(
+        color = Color(0xDD0D0D14),
+        topLeft = Offset(startX - bgPaddingX, hudY - bgHeight / 2f),
+        size = androidx.compose.ui.geometry.Size(totalWidth + (bgPaddingX * 2), bgHeight),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(11f, 11f)
+    )
+    drawRoundRect(
+        color = Color(0x66FFD54F),
+        topLeft = Offset(startX - bgPaddingX, hudY - bgHeight / 2f),
+        size = androidx.compose.ui.geometry.Size(totalWidth + (bgPaddingX * 2), bgHeight),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(11f, 11f),
+        style = Stroke(width = 1f)
+    )
+
+    // 2. Minimalist brush-stroke icons & stack dots
+    activeElements.forEachIndexed { idx, (element, stacks) ->
+        val iconCenterX = startX + (idx * iconWidth) + (iconWidth / 2f)
+        val iconCenterY = hudY
+        val elColor = when (element) {
+            CalligraphicElement.FROST -> Color(0xFF00E5FF)
+            CalligraphicElement.CINNABAR_FLAME -> Color(0xFFFF3D00)
+            CalligraphicElement.CORROSIVE_ACID -> Color(0xFF00E676)
+            CalligraphicElement.CELESTIAL_ASTRAL -> Color(0xFFFFD54F)
+        }
+
+        // Draw Minimalist Brushstroke Icon
+        when (element) {
+            CalligraphicElement.FROST -> {
+                // Frost: 6-pointed brush snowflake needle
+                for (a in 0 until 3) {
+                    val angle = a * (kotlin.math.PI / 3).toFloat()
+                    val dx = kotlin.math.cos(angle) * 5.5f
+                    val dy = kotlin.math.sin(angle) * 5.5f
+                    drawLine(
+                        color = elColor,
+                        start = Offset(iconCenterX - dx, iconCenterY - dy),
+                        end = Offset(iconCenterX + dx, iconCenterY + dy),
+                        strokeWidth = 1.8f,
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+            CalligraphicElement.CINNABAR_FLAME -> {
+                // Flame: Curling calligraphy lick
+                val p = Path().apply {
+                    moveTo(iconCenterX, iconCenterY - 6f)
+                    quadraticBezierTo(iconCenterX + 4f, iconCenterY - 1f, iconCenterX + 2f, iconCenterY + 4f)
+                    quadraticBezierTo(iconCenterX - 2f, iconCenterY + 6f, iconCenterX - 4f, iconCenterY + 1f)
+                    close()
+                }
+                drawPath(path = p, color = elColor)
+            }
+            CalligraphicElement.CORROSIVE_ACID -> {
+                // Acid: Teardrop droplet & splatter
+                drawCircle(color = elColor, radius = 3.5f, center = Offset(iconCenterX, iconCenterY + 1f))
+                drawCircle(color = elColor, radius = 1.5f, center = Offset(iconCenterX, iconCenterY - 4f))
+            }
+            CalligraphicElement.CELESTIAL_ASTRAL -> {
+                // Astral: Delicate orbiting star ring with core glyph
+                drawCircle(color = elColor, radius = 4.5f, center = Offset(iconCenterX, iconCenterY), style = Stroke(width = 1.4f))
+                drawCircle(color = Color.White, radius = 1.6f, center = Offset(iconCenterX, iconCenterY))
+            }
+        }
+
+        // Stack Tally Dots (1 to 5 tiny calligraphic dots)
+        val clampedStacks = stacks.coerceIn(1, 5)
+        val dotRadius = 1.2f
+        val dotSpacing = 3f
+        val startDotX = iconCenterX - ((clampedStacks - 1) * dotSpacing / 2f)
+        for (s in 0 until clampedStacks) {
+            drawCircle(
+                color = Color.White.copy(alpha = 0.9f),
+                radius = dotRadius,
+                center = Offset(startDotX + s * dotSpacing, iconCenterY + 7f)
+            )
+        }
+    }
+}
+
+// High-Contrast Ink-Brush Splash Animation (Triggered by reactions like Frozen Ink)
+private fun DrawScope.drawInkBrushSplashParticle(splash: InkBrushSplashParticle, camX: Float, camY: Float) {
+    val px = splash.x + camX
+    val py = splash.y + camY
+    val lifeRatio = (splash.life / splash.maxLife).coerceIn(0f, 1f)
+    if (lifeRatio <= 0f) return
+
+    val angle = kotlin.math.atan2(splash.vy, splash.vx)
+    val length = (splash.radius * 2.6f) * (0.4f + lifeRatio * 0.6f)
+    val width = splash.radius * lifeRatio
+
+    // Outer elemental radiant aura
+    drawLine(
+        color = splash.elementalGlowColor.copy(alpha = 0.55f * lifeRatio),
+        start = Offset(px - kotlin.math.cos(angle) * (length * 0.4f), py - kotlin.math.sin(angle) * (length * 0.4f)),
+        end = Offset(px + kotlin.math.cos(angle) * length, py + kotlin.math.sin(angle) * length),
+        strokeWidth = width * 1.8f,
+        cap = StrokeCap.Round
+    )
+
+    // Stark stark-black / stark-contrast sumi-e core brush stroke
+    drawLine(
+        color = splash.starkColor.copy(alpha = 0.95f * lifeRatio),
+        start = Offset(px - kotlin.math.cos(angle) * (length * 0.2f), py - kotlin.math.sin(angle) * (length * 0.2f)),
+        end = Offset(px + kotlin.math.cos(angle) * (length * 0.85f), py + kotlin.math.sin(angle) * (length * 0.85f)),
+        strokeWidth = width,
+        cap = StrokeCap.Round
+    )
+
+    // Sharp white ink speckle accent at bristle tip
+    drawCircle(
+        color = Color.White.copy(alpha = 0.8f * lifeRatio),
+        radius = (width * 0.25f).coerceAtLeast(1f),
+        center = Offset(px + kotlin.math.cos(angle) * length, py + kotlin.math.sin(angle) * length)
+    )
+}
+
+// High-Contrast Impact Frame / Shake Feedback Overlay
+private fun DrawScope.drawImpactFrameOverlay(
+    reaction: ElementalReactionType?,
+    timer: Float
+) {
+    val progress = (timer / 0.08f).coerceIn(0f, 1f)
+    if (progress <= 0f) return
+
+    val flashAlpha = (progress * 0.65f)
+    val (primaryColor, accentColor) = when (reaction) {
+        ElementalReactionType.FROZEN_INK -> Color(0xFF001220) to Color(0xFF00E5FF)
+        ElementalReactionType.BURNING_CALLIGRAPHY -> Color(0xFF280202) to Color(0xFFFF3D00)
+        ElementalReactionType.COSMIC_SUPERNOVA -> Color(0xFF140828) to Color(0xFFFFD54F)
+        ElementalReactionType.PERMAFROST_BLOSSOM -> Color(0xFF001A2C) to Color(0xFF80D8FF)
+        ElementalReactionType.THERMAL_SHOCK -> Color(0xFF2C0210) to Color(0xFFFF1744)
+        null -> Color(0xFF000000) to Color.White
+    }
+
+    // High-contrast negative tint flash
+    drawRect(
+        color = primaryColor.copy(alpha = flashAlpha)
+    )
+
+    // Diagonal calligraphic speed slash lines for dramatic impact
+    val w = size.width
+    val h = size.height
+    drawLine(
+        color = accentColor.copy(alpha = flashAlpha * 0.8f),
+        start = Offset(0f, h * 0.25f),
+        end = Offset(w, h * 0.75f),
+        strokeWidth = 3f * progress,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = Color.White.copy(alpha = flashAlpha * 0.9f),
+        start = Offset(w * 0.1f, 0f),
+        end = Offset(w * 0.9f, h),
+        strokeWidth = 2f * progress,
+        cap = StrokeCap.Round
     )
 }
 

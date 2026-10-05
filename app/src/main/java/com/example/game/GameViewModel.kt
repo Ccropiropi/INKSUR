@@ -1,6 +1,10 @@
 package com.example.game
 
 import android.app.Application
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
@@ -17,20 +21,26 @@ import com.example.model.AstralExpansionTrait
 import com.example.model.BlankScrollDrop
 import com.example.model.BlotterBurstVisual
 import com.example.model.BrokenStoneEntity
+import com.example.model.CalligraphicElement
 import com.example.model.ChainReactionTrait
 import com.example.model.CharacterDefinition
 import com.example.model.CinnabarSealEntity
 import com.example.model.ClassDefinition
 import com.example.model.DamageNumber
 import com.example.model.DeepWellTrait
+import com.example.model.ElementalParticle
+import com.example.model.ElementalReactionType
 import com.example.model.Enemy
 import com.example.model.EnemyType
 import com.example.model.EquippedGear
 import com.example.model.FlexNibTrait
+import com.example.model.FlowingSerpentEntity
 import com.example.model.GearType
 import com.example.model.InkPuddle
 import com.example.model.InkPuddlePool
 import com.example.model.InkProjectile
+import com.example.model.InkBrushSplashParticle
+import com.example.model.InkSplashParticle
 import com.example.model.InkwellStructure
 import com.example.model.InkwellVortexEntity
 import com.example.model.LevelUpChoice
@@ -38,10 +48,13 @@ import com.example.model.MagnumOpusVisual
 import com.example.model.ObeliskEntity
 import com.example.model.Orb
 import com.example.model.OrbitalRuneEntity
+import com.example.model.PassiveStatType
+import com.example.model.PlayerMotionTrailNode
 import com.example.model.PressurizedInkTrait
 import com.example.model.RapidRotationTrait
 import com.example.model.RazorFlowTrait
 import com.example.model.RedRuneEntity
+import com.example.model.ScreenElementalReactionVisual
 import com.example.model.SerratedNibTrait
 import com.example.model.SoundManager
 import com.example.model.SpellCastType
@@ -83,7 +96,8 @@ enum class ScreenState {
     BROKEN_STONE,
     BLANK_SCROLL,
     INKWELL_CHECKPOINT,
-    GAME_OVER
+    GAME_OVER,
+    SUMI_E_CODEX
 }
 
 data class PlayerState(
@@ -187,11 +201,191 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val damageNumbers = mutableListOf<DamageNumber>()
     val orbitalRunes = mutableListOf<OrbitalRuneEntity>()
     val cinnabarSeals = mutableListOf<CinnabarSealEntity>()
+    val inkSplashParticles = mutableListOf<InkSplashParticle>()
+    val playerMotionTrails = mutableListOf<PlayerMotionTrailNode>()
+    val flowingSerpents = mutableListOf<FlowingSerpentEntity>()
+    val elementalReactionVisuals = mutableListOf<ScreenElementalReactionVisual>()
+    val elementalParticles = mutableListOf<ElementalParticle>()
+    var activeElementalBanner by mutableStateOf<ElementalReactionType?>(null)
+    var activeElementalBannerTimer by mutableStateOf(0f)
+    var lastElementalReactionName by mutableStateOf<String?>(null)
+    private var playerTrailSpawnTimer: Float = 0f
+
+    // Two App Modes: Standard Run (Start from 0) vs Dev Testing (Unlocked All)
+    var isDevTestingMode by mutableStateOf(false)
+        private set
+
+    fun applyDevTestingMode(enabled: Boolean) {
+        isDevTestingMode = enabled
+        viewModelScope.launch {
+            if (enabled) {
+                repository.setDevModeUnlockedAll()
+                saveManager.writeSaveData(
+                    saveManager.loadSaveData().copy(
+                        gold = 999999,
+                        crystals = 99999,
+                        inkStones = 99999,
+                        metaAtkLevel = 10,
+                        metaSpeedLevel = 10,
+                        metaMagnetLevel = 10,
+                        unlockedCharacters = "calligrapher,painter,scholar,master,celestial",
+                        unlockedMapTier = 3
+                    )
+                )
+            } else {
+                repository.resetToFreshZero()
+                saveManager.writeSaveData(
+                    saveManager.loadSaveData().copy(
+                        gold = 0,
+                        crystals = 0,
+                        inkStones = 0,
+                        metaAtkLevel = 0,
+                        metaSpeedLevel = 0,
+                        metaMagnetLevel = 0,
+                        unlockedCharacters = "calligrapher",
+                        unlockedMapTier = 1,
+                        totalRuns = 0,
+                        totalKills = 0,
+                        maxSurvivalSeconds = 0
+                    )
+                )
+            }
+        }
+    }
+
+    fun toggleDevTestingMode() {
+        applyDevTestingMode(!isDevTestingMode)
+    }
 
     // Phase 5 Entities
     val inkwellStructures = mutableListOf<InkwellStructure>()
     val blotterBurstVisuals = mutableListOf<BlotterBurstVisual>()
     val theEraserBoss = TheEraserBoss()
+
+    // High-Contrast Ink-Brush Splash Particles for Elemental Combinations
+    val inkBrushSplashParticles = mutableListOf<InkBrushSplashParticle>()
+
+    // Settings: Screen Shake, Haptic Feedback & Impact Frame Hit-Stop
+    var isFixedAnalog by mutableStateOf(true)
+    var isScreenShakeEnabled by mutableStateOf(true)
+    var isHapticFeedbackEnabled by mutableStateOf(true)
+    var isImpactFrameEnabled by mutableStateOf(true)
+    var impactFrameTimer by mutableStateOf(0f)
+    var activeImpactReaction by mutableStateOf<ElementalReactionType?>(null)
+
+    fun updateFixedAnalog(fixed: Boolean) {
+        isFixedAnalog = fixed
+        saveManager.setFixedAnalog(fixed)
+    }
+
+    fun updateScreenShakeEnabled(enabled: Boolean) {
+        isScreenShakeEnabled = enabled
+        saveManager.setScreenShake(enabled)
+    }
+
+    fun updateHapticFeedbackEnabled(enabled: Boolean) {
+        isHapticFeedbackEnabled = enabled
+        soundManager.isHapticEnabled = enabled
+        saveManager.setHapticFeedback(enabled)
+    }
+
+    fun updateImpactFrameEnabled(enabled: Boolean) {
+        isImpactFrameEnabled = enabled
+        saveManager.setImpactFrame(enabled)
+    }
+
+    // Active elemental stacks tracking derived from player's active spells
+    val playerElementalStacks by derivedStateOf {
+        val stacks = mutableMapOf<CalligraphicElement, Int>()
+        for (spell in _uiState.value.activeSpells) {
+            val el = spell.element
+            stacks[el] = (stacks[el] ?: 0) + spell.rank
+        }
+        stacks
+    }
+
+    fun spawnHighContrastInkBrushSplash(
+        x: Float,
+        y: Float,
+        reactionType: ElementalReactionType,
+        count: Int = 36
+    ) {
+        val (starkColor, glowColor) = when (reactionType) {
+            ElementalReactionType.FROZEN_INK -> Color(0xFF020B14) to Color(0xFF00E5FF)
+            ElementalReactionType.BURNING_CALLIGRAPHY -> Color(0xFF2E0505) to Color(0xFFFF3D00)
+            ElementalReactionType.COSMIC_SUPERNOVA -> Color(0xFF100726) to Color(0xFFFFD54F)
+            ElementalReactionType.PERMAFROST_BLOSSOM -> Color(0xFF031626) to Color(0xFF80D8FF)
+            ElementalReactionType.THERMAL_SHOCK -> Color(0xFF280314) to Color(0xFFFF1744)
+        }
+
+        for (i in 0 until count) {
+            val angle = kotlin.random.Random.nextFloat() * 2f * kotlin.math.PI.toFloat()
+            val speed = 110f + kotlin.random.Random.nextFloat() * 380f
+            val maxLife = 0.55f + kotlin.random.Random.nextFloat() * 0.45f
+            val radius = 5f + kotlin.random.Random.nextFloat() * 12f
+
+            inkBrushSplashParticles.add(
+                InkBrushSplashParticle(
+                    id = ++entityIdCounter,
+                    x = x + (kotlin.random.Random.nextFloat() * 20f - 10f),
+                    y = y + (kotlin.random.Random.nextFloat() * 20f - 10f),
+                    vx = kotlin.math.cos(angle) * speed,
+                    vy = kotlin.math.sin(angle) * speed,
+                    radius = radius * 0.4f,
+                    maxRadius = radius,
+                    life = maxLife,
+                    maxLife = maxLife,
+                    starkColor = if (i % 3 == 0) glowColor else starkColor,
+                    elementalGlowColor = glowColor,
+                    strokeWidth = 3.5f + kotlin.random.Random.nextFloat() * 4f,
+                    splatterTendrilAngle = angle + (kotlin.random.Random.nextFloat() * 0.5f - 0.25f),
+                    splatterTendrilLength = 12f + kotlin.random.Random.nextFloat() * 26f,
+                    isFeatheredBleed = i % 2 == 0
+                )
+            )
+        }
+        if (inkBrushSplashParticles.size > 180) {
+            inkBrushSplashParticles.subList(0, inkBrushSplashParticles.size - 180).clear()
+        }
+    }
+
+    fun spawnInkFluidSplash(
+        x: Float,
+        y: Float,
+        count: Int = 6,
+        isCritOrBleed: Boolean = false,
+        baseDmg: Float = 20f
+    ) {
+        val numDroplets = count.coerceIn(3, 14)
+        for (i in 0 until numDroplets) {
+            val angle = kotlin.random.Random.nextFloat() * 2f * kotlin.math.PI.toFloat()
+            val speed = 70f + kotlin.random.Random.nextFloat() * (120f + baseDmg * 0.8f).coerceAtMost(350f)
+            val radius = 4f + kotlin.random.Random.nextFloat() * 6f
+            val maxLife = 0.45f + kotlin.random.Random.nextFloat() * 0.35f
+            inkSplashParticles.add(
+                InkSplashParticle(
+                    id = ++entityIdCounter,
+                    x = x + (kotlin.random.Random.nextFloat() * 14f - 7f),
+                    y = y + (kotlin.random.Random.nextFloat() * 14f - 7f),
+                    vx = kotlin.math.cos(angle) * speed,
+                    vy = kotlin.math.sin(angle) * speed,
+                    radius = radius * 0.65f,
+                    maxRadius = radius,
+                    life = maxLife,
+                    maxLife = maxLife,
+                    viscosity = 3.2f + kotlin.random.Random.nextFloat() * 1.2f,
+                    color = if (isCritOrBleed) Color(0xFFD32F2F) else Color(0xFF0F0F14),
+                    secondaryColor = if (isCritOrBleed) Color(0xFF380808) else Color(0xFF000000),
+                    isCrit = isCritOrBleed,
+                    tendrilAngle = angle + (kotlin.random.Random.nextFloat() * 0.4f - 0.2f),
+                    tendrilLength = 4f + kotlin.random.Random.nextFloat() * 10f
+                )
+            )
+        }
+        if (inkSplashParticles.size > 140) {
+            inkSplashParticles.subList(0, inkSplashParticles.size - 140).clear()
+        }
+    }
 
     // Entity counters & Timers
     private var entityIdCounter: Long = 0
@@ -202,8 +396,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var nextElitePackId: Long = 0L
     private val elitePackCounts = mutableMapOf<Long, Int>()
 
-    // Broken Stone spawn timer
-    private var nextBrokenStoneTime: Float = 90f
+    // Broken Stone spawn timer (Only after minute 25 = 1500s)
+    private var nextBrokenStoneTime: Float = 1500f
+    private var fieldOrbSpawnTimer: Float = 0f
+
+    // Passive Stat Upgrades
+    var passiveBonusHp: Float = 0f
+    var passiveBonusDmg: Float = 0f
+    var passiveBonusSpeed: Float = 0f
+    var passiveBonusArmor: Float = 0f
+    var passiveBonusPickup: Float = 0f
+    var passiveBonusAttackSpeed: Float = 0f
 
     // Pacing Bosses & Events
     private var titanSpawned: Boolean = false
@@ -238,6 +441,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         val saveData = saveManager.loadSaveData()
+        isFixedAnalog = saveData.fixedAnalog
+        isScreenShakeEnabled = saveData.screenShakeEnabled
+        isHapticFeedbackEnabled = saveData.hapticFeedbackEnabled
+        isImpactFrameEnabled = saveData.impactFrameEnabled
+        soundManager.isHapticEnabled = saveData.hapticFeedbackEnabled
         _uiState.value = _uiState.value.copy(
             hasBookmarkRun = saveManager.hasBookmark(),
             unlockedMapTier = saveData.unlockedMapTier
@@ -310,6 +518,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         washBrushVisuals.clear()
         orbitalRunes.clear()
         cinnabarSeals.clear()
+        inkSplashParticles.clear()
         orbs.clear()
         damageNumbers.clear()
         elitePackCounts.clear()
@@ -317,7 +526,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         entityIdCounter = 0
         enemySpawnTimer = 0f
         nextRedRuneTime = 150f
-        nextBrokenStoneTime = 90f
+        nextBrokenStoneTime = if (isDevTestingMode) 30f else 1500f
+        fieldOrbSpawnTimer = 0f
+        passiveBonusHp = 0f
+        passiveBonusDmg = 0f
+        passiveBonusSpeed = 0f
+        passiveBonusArmor = 0f
+        passiveBonusPickup = 0f
+        passiveBonusAttackSpeed = 0f
         titanSpawned = false
         midBossSpawned = false
         inkwellSpawned = false
@@ -506,6 +722,28 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         player.x += player.vx * clampedDt
         player.y += player.vy * clampedDt
 
+        // Dynamic player ink motion trail renderer
+        if (player.vx != 0f || player.vy != 0f) {
+            playerTrailSpawnTimer += clampedDt
+            if (playerTrailSpawnTimer >= 0.042f) {
+                playerTrailSpawnTimer = 0f
+                playerMotionTrails.add(
+                    PlayerMotionTrailNode(
+                        id = ++entityIdCounter,
+                        x = player.x,
+                        y = player.y,
+                        angle = player.lastMoveDirection,
+                        life = 0.55f,
+                        maxLife = 0.55f,
+                        width = 22f + kotlin.random.Random.nextFloat() * 6f
+                    )
+                )
+                if (playerMotionTrails.size > 40) {
+                    playerMotionTrails.removeAt(0)
+                }
+            }
+        }
+
         // Invincibility cooldown
         if (player.isInvincible) {
             player.invincibleTimer -= clampedDt
@@ -544,10 +782,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 4. In-Run Shop Trigger: Directly opens shop menu instead of approaching an NPC
-        if (newTime >= nextBrokenStoneTime && !enemySpawningHalted && _uiState.value.screen == ScreenState.PLAYING) {
-            nextBrokenStoneTime += 180f
-            triggerInRunShop()
+        // 3.5 Broken Stone Field Collision (Only accessible after minute 25)
+        val stoneIterator = brokenStones.iterator()
+        while (stoneIterator.hasNext()) {
+            val stone = stoneIterator.next()
+            stone.pulseTimer += clampedDt
+            if (hypot(player.x - stone.x, player.y - stone.y) < stone.radius + 24f) {
+                triggerBrokenStoneUI(stone)
+                break
+            }
+        }
+
+        // 4. Broken Stone Spawn: ONLY after minute 25 (1500s)
+        val isMin25OrDev = newTime >= 1500f || (isDevTestingMode && newTime >= 30f)
+        if (isMin25OrDev && newTime >= nextBrokenStoneTime && !enemySpawningHalted && brokenStones.isEmpty()) {
+            nextBrokenStoneTime += 240f
+            spawnBrokenStoneNearPlayer()
+            soundManager.playReactionBoom()
         }
 
         // 5. Boss Spawns:
@@ -636,7 +887,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val dist = hypot(enemy.x - proj.x, enemy.y - proj.y)
                 if (dist < enemy.type.radius + proj.strokeWidth) {
                     proj.hitEnemyIds.add(enemy.id)
-                    damageEnemy(enemy, proj.damage)
+                    damageEnemy(enemy, proj.damage, element = proj.element)
 
                     // Harpoon heavy pushback
                     if (proj.isHarpoon) {
@@ -702,7 +953,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 for (enemy in enemies) {
                     val dist = hypot(enemy.x - puddle.x, enemy.y - puddle.y)
                     if (dist < puddle.radius + enemy.type.radius) {
-                        damageEnemy(enemy, puddle.damage)
+                        val puddleEl = if (puddle.isBurningCalligraphy) CalligraphicElement.CINNABAR_FLAME else CalligraphicElement.CORROSIVE_ACID
+                        damageEnemy(enemy, puddle.damage, element = puddleEl)
+                        if (puddle.isFrozenInk && !enemy.isBoss) {
+                            enemy.frozenSolidTimer = 1.5f
+                        }
                         if (puddle.hasViscousRune) {
                             enemy.slowTimer = 2.5f
                             enemy.slowRatio = 0.40f
@@ -813,7 +1068,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     for (enemy in enemies) {
                         val d = kotlin.math.hypot(enemy.x - rx, enemy.y - ry)
                         if (d < enemy.type.radius + 18f) {
-                            damageEnemy(enemy, rune.damage)
+                            damageEnemy(enemy, rune.damage, element = CalligraphicElement.CELESTIAL_ASTRAL)
                             if (rune.hasViscous) {
                                 enemy.slowTimer = 2.0f
                                 enemy.slowRatio = 0.40f
@@ -842,7 +1097,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     for (enemy in enemies) {
                         val d = kotlin.math.hypot(enemy.x - seal.x, enemy.y - seal.y)
                         if (d <= seal.radius + enemy.type.radius) {
-                            damageEnemy(enemy, seal.damage)
+                            damageEnemy(enemy, seal.damage, element = CalligraphicElement.CINNABAR_FLAME)
                             if (seal.hasViscous) {
                                 enemy.slowTimer = 2.5f
                                 enemy.slowRatio = 0.40f
@@ -858,36 +1113,70 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 12. 60-Minute Map Scaling (Density over HP)
-        // Minute 0 to 30: Linear HP scaling. Minute 30+: Hard cap HP!
+        // 12. Demanding Spawn Rate Scaling & Capping (Smooth acceleration demanding active combat)
         val hpMultiplier = if (newTime <= 1800f) {
-            1.0f + (newTime / 1800f) * 3.5f
+            1.0f + (newTime / 1800f) * 3.2f
         } else {
-            4.5f
+            4.2f
         }
 
-        // Minute 31 to 60: Exponential speed and spawn density
         val speedMultiplier = if (newTime <= 1800f) {
-            1.0f
+            1.0f + (newTime / 1800f) * 0.45f
         } else {
-            1.0f + ((newTime - 1800f) / 1800f) * 1.5f
+            1.45f + ((newTime - 1800f) / 1800f) * 1.0f
         }
 
-        val spawnInterval = if (newTime <= 1800f) {
-            (1.1f - (newTime / 1800f) * 0.75f).coerceAtLeast(0.35f)
-        } else {
-            (0.35f - ((newTime - 1800f) / 1800f) * 0.27f).coerceAtLeast(0.08f)
+        // Spawn interval gets progressively demanding (more enemies over time!)
+        val spawnInterval = when {
+            newTime < 300f -> 1.0f - (newTime / 300f) * 0.35f          // 1.0s down to 0.65s
+            newTime < 900f -> 0.65f - ((newTime - 300f) / 600f) * 0.25f // 0.65s down to 0.40s
+            newTime < 1500f -> 0.40f - ((newTime - 900f) / 600f) * 0.18f// 0.40s down to 0.22s
+            else -> (0.22f - ((newTime - 1500f) / 1500f) * 0.10f).coerceAtLeast(0.10f) // 0.22s down to 0.10s
         }
 
-        val maxEnemies = if (newTime > 1800f) 150 else 85
+        // Cap enemy count to keep performance locked at 60fps and avoid off-screen stalls
+        val maxEnemies = when {
+            newTime < 600f -> 75
+            newTime < 1500f -> 75 + ((newTime - 600f) / 900f * 45f).toInt() // 75 -> 120
+            else -> 140
+        }
+
         enemySpawnTimer += clampedDt
         if (enemySpawnTimer >= spawnInterval && enemies.size < maxEnemies && !enemySpawningHalted && !theEraserBoss.active) {
             enemySpawnTimer = 0f
-            if (newTime > 1800f && Random.nextFloat() < 0.65f) {
+            if (newTime > 1500f && Random.nextFloat() < 0.55f) {
                 spawnHordeSwarm(hpMultiplier, speedMultiplier)
             } else {
                 spawnEnemyOutsideViewport(hpMultiplier, speedMultiplier)
             }
+        }
+
+        // In-Field Ambient Spawned Orbs (rewards exploration & movement!)
+        fieldOrbSpawnTimer += clampedDt
+        if (fieldOrbSpawnTimer >= 14f && orbs.size < 35 && !enemySpawningHalted) {
+            fieldOrbSpawnTimer = 0f
+            val orbAngle = Random.nextFloat() * 2 * PI.toFloat()
+            val orbDist = 280f + Random.nextFloat() * 200f
+            val isAboveMin25 = newTime >= 1500f || isDevTestingMode
+            val fieldTier = if (isAboveMin25) {
+                if (Random.nextFloat() < 0.35f) 3 else 2
+            } else {
+                1
+            }
+            val fieldVal = when (fieldTier) {
+                3 -> 25
+                2 -> 8
+                else -> 2
+            }
+            orbs.add(
+                Orb(
+                    id = ++entityIdCounter,
+                    x = player.x + cos(orbAngle) * orbDist,
+                    y = player.y + sin(orbAngle) * orbDist,
+                    value = fieldVal,
+                    tier = fieldTier
+                )
+            )
         }
 
         // 13. Update Enemies & AI with Collision & Separation
@@ -897,6 +1186,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
             if (enemy.flashTimer > 0f) enemy.flashTimer -= clampedDt
             if (enemy.attackCooldown > 0f) enemy.attackCooldown -= clampedDt
+            if (enemy.elementalReactionCooldown > 0f) enemy.elementalReactionCooldown -= clampedDt
+            if (enemy.frozenSolidTimer > 0f) enemy.frozenSolidTimer -= clampedDt
+            if (enemy.frostTimer > 0f) enemy.frostTimer -= clampedDt
+            if (enemy.acidTimer > 0f) enemy.acidTimer -= clampedDt
+            if (enemy.astralTimer > 0f) enemy.astralTimer -= clampedDt
+
+            // Burning flame ticking damage
+            if (enemy.flameTimer > 0f) {
+                enemy.flameTimer -= clampedDt
+                enemy.burningTickTimer += clampedDt
+                if (enemy.burningTickTimer >= 0.40f) {
+                    enemy.burningTickTimer = 0f
+                    damageEnemy(enemy, enemy.burningDamagePerTick, isBleed = false, isReaction = true)
+                    spawnInkFluidSplash(enemy.x, enemy.y, count = 2, isCritOrBleed = true, baseDmg = enemy.burningDamagePerTick)
+                }
+            }
 
             if (enemy.bleedTimer > 0f) {
                 enemy.bleedTimer -= clampedDt
@@ -1037,12 +1342,27 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         soundManager.playReactionBoom()
                     }
                 } else {
+                    val isAboveMin25 = newTime >= 1500f || isDevTestingMode
+                    val orbTier = when {
+                        !isAboveMin25 -> 1 // Only lowest tier for lowest tier enemy before minute 25
+                        enemy.isBoss -> 3
+                        enemy.isElite -> if (Random.nextFloat() < 0.60f) 3 else 2
+                        enemy.type == EnemyType.PAPER_BRUTE -> if (Random.nextFloat() < 0.45f) 3 else 2
+                        enemy.type == EnemyType.FOLDED_STALKER -> 2
+                        else -> if (Random.nextFloat() < 0.30f) 2 else 1
+                    }
+                    val orbValue = when (orbTier) {
+                        3 -> (enemy.type.xpValue * 4).coerceAtLeast(20)
+                        2 -> (enemy.type.xpValue * 2).coerceAtLeast(6)
+                        else -> enemy.type.xpValue
+                    }
                     orbs.add(
                         Orb(
                             id = ++entityIdCounter,
                             x = enemy.x,
                             y = enemy.y,
-                            value = enemy.type.xpValue
+                            value = orbValue,
+                            tier = orbTier
                         )
                     )
                 }
@@ -1099,6 +1419,141 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (dn.life <= 0f) dmgIterator.remove()
         }
 
+        // 16.1 Fluid Simulation Particle System (Viscous Ink Splash Physics)
+        val splashIterator = inkSplashParticles.iterator()
+        while (splashIterator.hasNext()) {
+            val p = splashIterator.next()
+            p.life -= clampedDt
+            if (p.life <= 0f) {
+                splashIterator.remove()
+                continue
+            }
+            p.x += p.vx * clampedDt
+            p.y += p.vy * clampedDt
+            val drag = (1f - p.viscosity * clampedDt).coerceIn(0f, 1f)
+            p.vx *= drag
+            p.vy *= drag
+            val lifeRatio = (1f - (p.life / p.maxLife)).coerceIn(0f, 1f)
+            p.radius = p.maxRadius * (0.60f + 0.40f * lifeRatio)
+        }
+
+        // 16.2 Player Motion Trail Updates
+        val trailIterator = playerMotionTrails.iterator()
+        while (trailIterator.hasNext()) {
+            val node = trailIterator.next()
+            node.life -= clampedDt
+            if (node.life <= 0f) {
+                trailIterator.remove()
+            }
+        }
+
+        // 16.3 Flowing Serpent Spell Simulation
+        val serpentIterator = flowingSerpents.iterator()
+        while (serpentIterator.hasNext()) {
+            val serpent = serpentIterator.next()
+            serpent.life -= clampedDt
+            serpent.waveTimer += clampedDt
+            serpent.tickTimer += clampedDt
+
+            if (enemies.isNotEmpty()) {
+                val targetE = enemies.minByOrNull { hypot(it.x - serpent.x, it.y - serpent.y) }
+                if (targetE != null) {
+                    val desiredAngle = atan2(targetE.y - serpent.y, targetE.x - serpent.x)
+                    var angleDiff = desiredAngle - serpent.currentAngle
+                    while (angleDiff > PI) angleDiff -= (2 * PI).toFloat()
+                    while (angleDiff < -PI) angleDiff += (2 * PI).toFloat()
+                    serpent.currentAngle += angleDiff.coerceIn(-4.2f * clampedDt, 4.2f * clampedDt)
+                }
+            }
+
+            val undulatingAngle = serpent.currentAngle + sin(serpent.waveTimer * 10f) * 0.35f
+            serpent.x += cos(undulatingAngle) * serpent.speed * clampedDt
+            serpent.y += sin(undulatingAngle) * serpent.speed * clampedDt
+
+            serpent.segments.add(0, Offset(serpent.x, serpent.y))
+            if (serpent.segments.size > 16) {
+                serpent.segments.removeAt(serpent.segments.size - 1)
+            }
+
+            if (serpent.tickTimer >= 0.22f) {
+                serpent.tickTimer = 0f
+                for (enemy in enemies) {
+                    val headDist = hypot(enemy.x - serpent.x, enemy.y - serpent.y)
+                    val hitsBody = headDist < serpent.radius + enemy.type.radius ||
+                        serpent.segments.any { hypot(enemy.x - it.x, enemy.y - it.y) < serpent.radius * 0.75f + enemy.type.radius }
+                    if (hitsBody) {
+                        damageEnemy(enemy, serpent.damage * 0.38f, element = CalligraphicElement.CELESTIAL_ASTRAL)
+                        spawnInkFluidSplash(enemy.x, enemy.y, count = 2, baseDmg = serpent.damage)
+                    }
+                }
+            }
+
+            if (serpent.life <= 0f) {
+                spawnInkFluidSplash(serpent.x, serpent.y, count = 8, baseDmg = serpent.damage)
+                serpentIterator.remove()
+            }
+        }
+
+        // 16.4 Update Screen Elemental Reactions
+        val reactionIterator = elementalReactionVisuals.iterator()
+        while (reactionIterator.hasNext()) {
+            val visual = reactionIterator.next()
+            visual.timer += clampedDt
+            if (visual.isFinished) {
+                reactionIterator.remove()
+            }
+        }
+
+        // 16.5 Update Elemental Particles (Ice Shards & Fire Embers)
+        val partIterator = elementalParticles.iterator()
+        while (partIterator.hasNext()) {
+            val p = partIterator.next()
+            p.life -= clampedDt
+            if (p.life <= 0f) {
+                partIterator.remove()
+                continue
+            }
+            p.x += p.vx * clampedDt
+            p.y += p.vy * clampedDt
+            p.vx *= (1f - 1.8f * clampedDt).coerceIn(0f, 1f)
+            p.vy *= (1f - 1.8f * clampedDt).coerceIn(0f, 1f)
+            p.angle += p.rotSpeed * clampedDt
+        }
+
+        // 16.6 Update High-Contrast Ink-Brush Splash Animation Particles
+        val splashIter = inkBrushSplashParticles.iterator()
+        while (splashIter.hasNext()) {
+            val p = splashIter.next()
+            p.life -= clampedDt
+            if (p.life <= 0f) {
+                splashIter.remove()
+                continue
+            }
+            p.x += p.vx * clampedDt
+            p.y += p.vy * clampedDt
+            p.vx *= (1f - 2.8f * clampedDt).coerceIn(0f, 1f)
+            p.vy *= (1f - 2.8f * clampedDt).coerceIn(0f, 1f)
+            val lifeRatio = (1f - (p.life / p.maxLife)).coerceIn(0f, 1f)
+            p.radius = p.maxRadius * (0.4f + 0.6f * lifeRatio)
+        }
+
+        // Update impact frame timer
+        if (impactFrameTimer > 0f) {
+            impactFrameTimer -= clampedDt
+            if (impactFrameTimer <= 0f) {
+                impactFrameTimer = 0f
+                activeImpactReaction = null
+            }
+        }
+
+        // Update active banner timer
+        if (activeElementalBannerTimer > 0f) {
+            activeElementalBannerTimer -= clampedDt
+            if (activeElementalBannerTimer <= 0f) {
+                activeElementalBanner = null
+            }
+        }
+
         _uiState.value = _uiState.value.copy(
             timeSurvivedSeconds = newTime,
             redRuneActive = redRunes.isNotEmpty(),
@@ -1112,6 +1567,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val facingDir = player.lastMoveDirection
         val damage = activeSpell.getEffectiveDamage(player.damageMultiplier)
         val hasViscous = activeSpell.hasViscousRune()
+        val spellElement = activeSpell.element
 
         val hasRuler = _uiState.value.equippedArtifacts.any { it.id == ArtifactDefinition.TheFracturedRuler.id }
         val isGeometryMastered = masteryManager.isSacredGeometryMastered
@@ -1149,6 +1605,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                                 isUltimate = true,
                                 sourceSpellId = activeSpell.definition.id,
                                 hasViscousRune = hasViscous,
+                                element = spellElement,
                                 bounceRemaining = bounceCount,
                                 bounceDamageMultiplier = bounceDelta,
                                 isSacredGeometry = hasRuler,
@@ -1375,12 +1832,66 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
             }
+
+            SpellCastType.FOOTPRINT_TRAIL -> {
+                // Searing sumi-e footprints / wake trail behind the player
+                // Properties: size (areaRadius), duration (durationSeconds), damage
+                val trailRadius = activeSpell.getEffectiveAreaRadius()
+                val trailDuration = activeSpell.getEffectiveDuration()
+                val trailDmg = damage * 0.45f
+
+                // Drop slightly behind current movement direction
+                val footX = player.x - kotlin.math.cos(facingDir) * 18f
+                val footY = player.y - kotlin.math.sin(facingDir) * 18f
+
+                puddlePool.obtain(
+                    x = footX,
+                    y = footY,
+                    radius = trailRadius,
+                    damage = trailDmg,
+                    maxLife = trailDuration,
+                    sourceSpellId = activeSpell.definition.id,
+                    hasViscousRune = hasViscous
+                )
+                spawnInkFluidSplash(footX, footY, count = 3, baseDmg = trailDmg)
+            }
+
+            SpellCastType.FLOWING_SERPENT -> {
+                soundManager.playSwoosh()
+                val speed = if (activeSpell.definition.baseSpeed > 0f) activeSpell.definition.baseSpeed * character.projectileSpeedMultiplier else 400f
+                val life = activeSpell.getEffectiveDuration()
+                val serpentRadius = activeSpell.getEffectiveAreaRadius()
+
+                var targetAngle = facingDir
+                if (enemies.isNotEmpty()) {
+                    val targetE = enemies.minByOrNull { kotlin.math.hypot(it.x - player.x, it.y - player.y) }
+                    if (targetE != null) {
+                        targetAngle = kotlin.math.atan2(targetE.y - player.y, targetE.x - player.x)
+                    }
+                }
+
+                flowingSerpents.add(
+                    FlowingSerpentEntity(
+                        id = ++entityIdCounter,
+                        x = player.x,
+                        y = player.y,
+                        targetAngle = targetAngle,
+                        currentAngle = facingDir,
+                        speed = speed,
+                        damage = damage,
+                        radius = serpentRadius,
+                        life = life,
+                        maxLife = life
+                    )
+                )
+            }
         }
     }
 
     private fun spawnEnemyOutsideViewport(hpMult: Float = 1.0f, speedMult: Float = 1.0f) {
         val angle = Random.nextFloat() * 2 * PI.toFloat()
-        val spawnDistance = 460f
+        // Outside screen frame (prevents spawning directly in frame)
+        val spawnDistance = 550f + Random.nextFloat() * 70f
         val ex = player.x + cos(angle) * spawnDistance
         val ey = player.y + sin(angle) * spawnDistance
 
@@ -1409,7 +1920,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val clusterCount = Random.nextInt(4, 7)
         for (i in 0 until clusterCount) {
             val angle = baseAngle + (i - clusterCount / 2f) * 0.18f
-            val dist = 480f + Random.nextFloat() * 40f
+            val dist = 560f + Random.nextFloat() * 60f
             val ex = player.x + cos(angle) * dist
             val ey = player.y + sin(angle) * dist
             val type = if (Random.nextFloat() < 0.7f) EnemyType.BASIC_CONSTRUCT else EnemyType.FOLDED_STALKER
@@ -1843,23 +2354,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val character = _uiState.value.character
         val artifacts = _uiState.value.equippedArtifacts
 
-        var totalDmgMult = 1.0f * character.damageMultiplier
+        var totalDmgMult = (1.0f * character.damageMultiplier) + passiveBonusDmg
         var totalSpeedAdd = 0f
-        var totalSpeedMult = 1.0f
-        var totalArmor = 0f
-        var totalAttackSpeed = 1.0f
+        var totalSpeedMult = 1.0f + passiveBonusSpeed
+        var totalArmor = passiveBonusArmor
+        var totalAttackSpeed = 1.0f + passiveBonusAttackSpeed
         var maxHpMult = 1.0f
 
+        var currentPickupRadius = 110f + passiveBonusPickup
         for (g in _uiState.value.equippedGear) {
             when (g.type) {
                 GearType.HEAVY_VELLUM -> totalArmor += 3f * g.stacks
                 GearType.ERGONOMIC_GRIP -> totalAttackSpeed += 0.15f * g.stacks
                 GearType.DENSE_SOOT -> totalDmgMult += 0.20f * g.stacks
                 GearType.SCRIBES_SANDAL -> totalSpeedAdd += 30f * g.stacks
-                GearType.LODESTONE_INKWELL -> player.pickupRadius = 110f + (45f * g.stacks)
+                GearType.LODESTONE_INKWELL -> currentPickupRadius += (45f * g.stacks)
                 GearType.SPRING_WATER -> {}
             }
         }
+        player.pickupRadius = currentPickupRadius
 
         for (art in artifacts) {
             totalDmgMult += art.damageModifier
@@ -1873,7 +2386,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         player.moveSpeed = ((player.baseMoveSpeed + totalSpeedAdd) * totalSpeedMult).coerceAtLeast(40f)
         player.armor = totalArmor
         player.attackSpeedMultiplier = totalAttackSpeed.coerceAtLeast(0.2f)
-        player.maxHp = (100f * maxHpMult).coerceAtLeast(20f)
+        player.maxHp = ((100f + passiveBonusHp) * maxHpMult).coerceAtLeast(20f)
         player.hp = player.hp.coerceAtMost(player.maxHp)
     }
 
@@ -1925,13 +2438,74 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun damageEnemy(enemy: Enemy, damage: Float, isBleed: Boolean = false) {
+    private fun damageEnemy(
+        enemy: Enemy,
+        damage: Float,
+        isBleed: Boolean = false,
+        element: CalligraphicElement? = null,
+        isReaction: Boolean = false
+    ) {
         if (enemy.isDead) return
         var finalDmg = damage
+        var isCritHit = false
+
         if (isBleed) {
             val poisonBonus = _uiState.value.equippedArtifacts.sumOf { it.poisonDamageMultiplier.toDouble() }.toFloat()
             finalDmg *= (1.0f + poisonBonus)
         }
+
+        // Frozen Solid vulnerability bonus: +60% shatter damage
+        if (enemy.frozenSolidTimer > 0f) {
+            finalDmg *= 1.60f
+            isCritHit = true
+            spawnElementalIceShards(enemy.x, enemy.y, count = 4)
+        }
+
+        // Elemental Priming & Reaction Triggering
+        if (element != null && !isReaction && enemy.elementalReactionCooldown <= 0f) {
+            when (element) {
+                CalligraphicElement.FROST -> {
+                    enemy.frostTimer = 4.0f
+                    enemy.slowTimer = 3.0f
+                    enemy.slowRatio = 0.45f
+                    if (enemy.acidTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.FROZEN_INK, finalDmg)
+                    } else if (enemy.flameTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.THERMAL_SHOCK, finalDmg)
+                    } else if (enemy.astralTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.PERMAFROST_BLOSSOM, finalDmg)
+                    }
+                }
+                CalligraphicElement.CINNABAR_FLAME -> {
+                    enemy.flameTimer = 4.0f
+                    enemy.burningDamagePerTick = (finalDmg * 0.35f).coerceAtLeast(6f)
+                    if (enemy.frozenSolidTimer > 0f || enemy.frostTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.THERMAL_SHOCK, finalDmg)
+                    } else if (enemy.acidTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.BURNING_CALLIGRAPHY, finalDmg)
+                    } else if (enemy.astralTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.COSMIC_SUPERNOVA, finalDmg)
+                    }
+                }
+                CalligraphicElement.CORROSIVE_ACID -> {
+                    enemy.acidTimer = 4.5f
+                    if (enemy.frostTimer > 0f || enemy.frozenSolidTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.FROZEN_INK, finalDmg)
+                    } else if (enemy.flameTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.BURNING_CALLIGRAPHY, finalDmg)
+                    }
+                }
+                CalligraphicElement.CELESTIAL_ASTRAL -> {
+                    enemy.astralTimer = 4.0f
+                    if (enemy.flameTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.COSMIC_SUPERNOVA, finalDmg)
+                    } else if (enemy.frostTimer > 0f || enemy.frozenSolidTimer > 0f) {
+                        triggerElementalReaction(enemy, ElementalReactionType.PERMAFROST_BLOSSOM, finalDmg)
+                    }
+                }
+            }
+        }
+
         enemy.hp -= finalDmg
         enemy.flashTimer = 0.12f
         _uiState.value = _uiState.value.copy(damageDealt = _uiState.value.damageDealt + finalDmg.toLong())
@@ -1942,8 +2516,28 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             player.hp = (player.hp + healAmount).coerceAtMost(player.maxHp)
         }
 
-        if (!isBleed) {
+        if (!isBleed && !isReaction) {
             soundManager.playHit()
+        }
+
+        // Spawn fluid simulation ink splash particles
+        spawnInkFluidSplash(
+            x = enemy.x,
+            y = enemy.y,
+            count = if (finalDmg > 60f) 8 else 5,
+            isCritOrBleed = isBleed || isCritHit,
+            baseDmg = finalDmg
+        )
+
+        val dmgColor = when {
+            isReaction -> Color(0xFFFF9100)
+            isCritHit -> Color(0xFF00E5FF)
+            isBleed -> Color(0xFFD32F2F)
+            element == CalligraphicElement.FROST -> Color(0xFF00E5FF)
+            element == CalligraphicElement.CINNABAR_FLAME -> Color(0xFFFF3D00)
+            element == CalligraphicElement.CORROSIVE_ACID -> Color(0xFF00E676)
+            element == CalligraphicElement.CELESTIAL_ASTRAL -> Color(0xFFFFD54F)
+            else -> Color.Black
         }
 
         damageNumbers.add(
@@ -1952,9 +2546,228 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 x = enemy.x + Random.nextFloat() * 16f - 8f,
                 y = enemy.y - 18f,
                 text = "${finalDmg.toInt()}",
-                color = if (isBleed) Color(0xFFD32F2F) else Color.Black
+                color = dmgColor,
+                isCritical = isCritHit || isReaction
             )
         )
+    }
+
+    private fun triggerElementalReaction(
+        primaryEnemy: Enemy,
+        reactionType: ElementalReactionType,
+        baseDamage: Float
+    ) {
+        primaryEnemy.elementalReactionCooldown = 0.75f
+        activeElementalBanner = reactionType
+        activeElementalBannerTimer = 2.0f
+        lastElementalReactionName = reactionType.title
+        soundManager.playReactionBoom()
+
+        if (isScreenShakeEnabled) {
+            screenShakeTimer = 0.45f
+        }
+        if (isHapticFeedbackEnabled) {
+            soundManager.triggerHaptic(SoundManager.VibrationType.HEAVY)
+        }
+        if (isImpactFrameEnabled) {
+            impactFrameTimer = 0.08f
+            activeImpactReaction = reactionType
+        }
+
+        spawnHighContrastInkBrushSplash(primaryEnemy.x, primaryEnemy.y, reactionType, count = 38)
+
+        val reactionDamage = (baseDamage * 2.4f).coerceAtLeast(70f)
+        val reactionRadius = when (reactionType) {
+            ElementalReactionType.COSMIC_SUPERNOVA -> 600f
+            ElementalReactionType.BURNING_CALLIGRAPHY -> 520f
+            ElementalReactionType.FROZEN_INK -> 440f
+            ElementalReactionType.PERMAFROST_BLOSSOM -> 550f
+            ElementalReactionType.THERMAL_SHOCK -> 380f
+        }
+
+        elementalReactionVisuals.add(
+            ScreenElementalReactionVisual(
+                id = ++entityIdCounter,
+                reactionType = reactionType,
+                x = primaryEnemy.x,
+                y = primaryEnemy.y,
+                damage = reactionDamage,
+                radius = reactionRadius
+            )
+        )
+
+        when (reactionType) {
+            ElementalReactionType.FROZEN_INK -> {
+                primaryEnemy.acidTimer = 0f
+                primaryEnemy.frostTimer = 0f
+                primaryEnemy.frozenSolidTimer = 3.0f
+
+                for (other in enemies) {
+                    val d = kotlin.math.hypot(other.x - primaryEnemy.x, other.y - primaryEnemy.y)
+                    if (d <= reactionRadius) {
+                        other.frozenSolidTimer = 2.5f
+                        damageEnemy(other, reactionDamage, isReaction = true)
+                    }
+                }
+                for (i in 0 until puddlePool.pool.size) {
+                    val p = puddlePool.pool[i]
+                    if (p.active && kotlin.math.hypot(p.x - primaryEnemy.x, p.y - primaryEnemy.y) <= reactionRadius) {
+                        p.isFrozenInk = true
+                        p.isBurningCalligraphy = false
+                        p.maxLife += 2.5f
+                    }
+                }
+                spawnElementalIceShards(primaryEnemy.x, primaryEnemy.y, count = 24)
+            }
+            ElementalReactionType.BURNING_CALLIGRAPHY -> {
+                primaryEnemy.acidTimer = 0f
+                primaryEnemy.flameTimer = 4.5f
+                primaryEnemy.burningDamagePerTick = (reactionDamage * 0.40f).coerceAtLeast(14f)
+
+                for (other in enemies) {
+                    val d = kotlin.math.hypot(other.x - primaryEnemy.x, other.y - primaryEnemy.y)
+                    if (d <= reactionRadius) {
+                        other.flameTimer = 4.5f
+                        other.burningDamagePerTick = (reactionDamage * 0.40f).coerceAtLeast(14f)
+                        damageEnemy(other, reactionDamage, isReaction = true)
+                    }
+                }
+                for (i in 0 until puddlePool.pool.size) {
+                    val p = puddlePool.pool[i]
+                    if (p.active && kotlin.math.hypot(p.x - primaryEnemy.x, p.y - primaryEnemy.y) <= reactionRadius) {
+                        p.isBurningCalligraphy = true
+                        p.isFrozenInk = false
+                        p.damage *= 1.75f
+                        p.maxLife += 2.0f
+                    }
+                }
+                spawnElementalFireEmbers(primaryEnemy.x, primaryEnemy.y, count = 28)
+            }
+            ElementalReactionType.COSMIC_SUPERNOVA -> {
+                primaryEnemy.astralTimer = 0f
+                primaryEnemy.flameTimer = 0f
+
+                for (other in enemies) {
+                    val d = kotlin.math.hypot(other.x - primaryEnemy.x, other.y - primaryEnemy.y)
+                    if (d <= reactionRadius && d > 10f) {
+                        val angle = kotlin.math.atan2(primaryEnemy.y - other.y, primaryEnemy.x - other.x)
+                        val pullForce = 85f
+                        other.x += kotlin.math.cos(angle) * pullForce
+                        other.y += kotlin.math.sin(angle) * pullForce
+                        damageEnemy(other, reactionDamage * 1.35f, isReaction = true)
+                    }
+                }
+                spawnElementalCosmicMotes(primaryEnemy.x, primaryEnemy.y, count = 30)
+            }
+            ElementalReactionType.PERMAFROST_BLOSSOM -> {
+                primaryEnemy.astralTimer = 0f
+                primaryEnemy.frostTimer = 0f
+                primaryEnemy.frozenSolidTimer = 3.5f
+
+                for (other in enemies) {
+                    val d = kotlin.math.hypot(other.x - primaryEnemy.x, other.y - primaryEnemy.y)
+                    if (d <= reactionRadius) {
+                        other.slowTimer = 4.0f
+                        other.slowRatio = 0.75f
+                        if (d <= reactionRadius * 0.6f) {
+                            other.frozenSolidTimer = 2.5f
+                        }
+                        damageEnemy(other, reactionDamage, isReaction = true)
+                    }
+                }
+                spawnElementalIceShards(primaryEnemy.x, primaryEnemy.y, count = 24)
+            }
+            ElementalReactionType.THERMAL_SHOCK -> {
+                primaryEnemy.frostTimer = 0f
+                primaryEnemy.flameTimer = 0f
+                primaryEnemy.frozenSolidTimer = 0f
+
+                for (other in enemies) {
+                    val d = kotlin.math.hypot(other.x - primaryEnemy.x, other.y - primaryEnemy.y)
+                    if (d <= reactionRadius) {
+                        val angle = kotlin.math.atan2(other.y - primaryEnemy.y, other.x - primaryEnemy.x)
+                        val push = if (other.isBoss) 25f else 95f
+                        other.x += kotlin.math.cos(angle) * push
+                        other.y += kotlin.math.sin(angle) * push
+                        damageEnemy(other, reactionDamage * 1.5f, isReaction = true)
+                    }
+                }
+                spawnElementalFireEmbers(primaryEnemy.x, primaryEnemy.y, count = 14)
+                spawnElementalIceShards(primaryEnemy.x, primaryEnemy.y, count = 14)
+            }
+        }
+    }
+
+    private fun spawnElementalIceShards(x: Float, y: Float, count: Int) {
+        val colors = listOf(Color(0xFF00E5FF), Color(0xFFE0F7FA), Color(0xFF18FFFF), Color(0xFF001F3F))
+        for (i in 0 until count) {
+            val angle = Random.nextFloat() * 2f * kotlin.math.PI.toFloat()
+            val speed = Random.nextFloat() * 260f + 60f
+            elementalParticles.add(
+                ElementalParticle(
+                    id = ++entityIdCounter,
+                    x = x,
+                    y = y,
+                    vx = kotlin.math.cos(angle) * speed,
+                    vy = kotlin.math.sin(angle) * speed,
+                    color = colors[Random.nextInt(colors.size)],
+                    size = Random.nextFloat() * 12f + 6f,
+                    life = Random.nextFloat() * 0.6f + 0.4f,
+                    maxLife = 1.0f,
+                    isShard = true,
+                    angle = Random.nextFloat() * 360f,
+                    rotSpeed = Random.nextFloat() * 10f - 5f
+                )
+            )
+        }
+    }
+
+    private fun spawnElementalFireEmbers(x: Float, y: Float, count: Int) {
+        val colors = listOf(Color(0xFFFF3D00), Color(0xFFFF9100), Color(0xFFFFD600), Color(0xFFD50000))
+        for (i in 0 until count) {
+            val angle = Random.nextFloat() * 2f * kotlin.math.PI.toFloat()
+            val speed = Random.nextFloat() * 280f + 70f
+            elementalParticles.add(
+                ElementalParticle(
+                    id = ++entityIdCounter,
+                    x = x,
+                    y = y,
+                    vx = kotlin.math.cos(angle) * speed,
+                    vy = kotlin.math.sin(angle) * speed,
+                    color = colors[Random.nextInt(colors.size)],
+                    size = Random.nextFloat() * 10f + 5f,
+                    life = Random.nextFloat() * 0.7f + 0.35f,
+                    maxLife = 1.05f,
+                    isShard = false,
+                    angle = Random.nextFloat() * 360f,
+                    rotSpeed = Random.nextFloat() * 8f - 4f
+                )
+            )
+        }
+    }
+
+    private fun spawnElementalCosmicMotes(x: Float, y: Float, count: Int) {
+        val colors = listOf(Color(0xFFFFD54F), Color(0xFF7C4DFF), Color(0xFFB388FF), Color(0xFFFFEA00))
+        for (i in 0 until count) {
+            val angle = Random.nextFloat() * 2f * kotlin.math.PI.toFloat()
+            val speed = Random.nextFloat() * 250f + 50f
+            elementalParticles.add(
+                ElementalParticle(
+                    id = ++entityIdCounter,
+                    x = x,
+                    y = y,
+                    vx = kotlin.math.cos(angle) * speed,
+                    vy = kotlin.math.sin(angle) * speed,
+                    color = colors[Random.nextInt(colors.size)],
+                    size = Random.nextFloat() * 11f + 5f,
+                    life = Random.nextFloat() * 0.8f + 0.4f,
+                    maxLife = 1.2f,
+                    isShard = true,
+                    angle = Random.nextFloat() * 360f,
+                    rotSpeed = Random.nextFloat() * 12f - 6f
+                )
+            )
+        }
     }
 
     private fun damagePlayer(rawDamage: Float) {
@@ -2142,6 +2955,59 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Dedicated Passive Stat Upgrades
+        val passiveStatPool = listOf(
+            LevelUpChoice.PassiveStatChoice(
+                statType = PassiveStatType.DRAGON_BLOOD_HP,
+                title = "Dragon Blood Vellum",
+                badge = "+HP",
+                subtitle = "Hero Vitality",
+                description = "+25 Maximum Health and immediately restores 25 HP.",
+                bonusValue = 25f
+            ),
+            LevelUpChoice.PassiveStatChoice(
+                statType = PassiveStatType.SWIFT_BRUSH_SPEED,
+                title = "Swift Brushwork",
+                badge = "+Speed",
+                subtitle = "Mobility Transcendence",
+                description = "+12% Movement Speed across the battlefield.",
+                bonusValue = 0.12f
+            ),
+            LevelUpChoice.PassiveStatChoice(
+                statType = PassiveStatType.CARBON_DENSITY_DMG,
+                title = "Carbon Soot Density",
+                badge = "+Damage",
+                subtitle = "Ink Concentration",
+                description = "+15% All Calligraphic Damage.",
+                bonusValue = 0.15f
+            ),
+            LevelUpChoice.PassiveStatChoice(
+                statType = PassiveStatType.EXPANDED_WELL_MAGNET,
+                title = "Expanded Well",
+                badge = "+Magnet",
+                subtitle = "Essence Attraction",
+                description = "+35 Attraction Pickup Radius for ink orbs.",
+                bonusValue = 35f
+            ),
+            LevelUpChoice.PassiveStatChoice(
+                statType = PassiveStatType.TEMPERED_NIB_ARMOR,
+                title = "Tempered Steel Nib",
+                badge = "+Armor",
+                subtitle = "Paper Horror Ward",
+                description = "+2 Flat Armor, reducing damage taken from enemy contacts.",
+                bonusValue = 2f
+            ),
+            LevelUpChoice.PassiveStatChoice(
+                statType = PassiveStatType.KEEN_BRISTLE_CRIT,
+                title = "Keen Bristle Flake",
+                badge = "+Atk Spd",
+                subtitle = "Lethal Inscription",
+                description = "+12% Spell Casting & Attack Speed.",
+                bonusValue = 0.12f
+            )
+        )
+        choices.addAll(passiveStatPool.shuffled().take(2))
+
         val currentGear = _uiState.value.equippedGear.associate { it.type to it.stacks }
         val randomGears = GearType.entries.shuffled().map { type ->
             val stacks = currentGear[type] ?: 0
@@ -2214,6 +3080,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
             is LevelUpChoice.GearChoice -> {
                 applyGearStatStick(choice.gearType)
+            }
+
+            is LevelUpChoice.PassiveStatChoice -> {
+                when (choice.statType) {
+                    PassiveStatType.DRAGON_BLOOD_HP -> {
+                        passiveBonusHp += choice.bonusValue
+                        player.hp = (player.hp + choice.bonusValue).coerceAtMost(player.maxHp + choice.bonusValue)
+                    }
+                    PassiveStatType.SWIFT_BRUSH_SPEED -> {
+                        passiveBonusSpeed += choice.bonusValue
+                    }
+                    PassiveStatType.CARBON_DENSITY_DMG -> {
+                        passiveBonusDmg += choice.bonusValue
+                    }
+                    PassiveStatType.EXPANDED_WELL_MAGNET -> {
+                        passiveBonusPickup += choice.bonusValue
+                    }
+                    PassiveStatType.TEMPERED_NIB_ARMOR -> {
+                        passiveBonusArmor += choice.bonusValue
+                    }
+                    PassiveStatType.KEEN_BRISTLE_CRIT -> {
+                        passiveBonusAttackSpeed += choice.bonusValue
+                    }
+                }
+                recalculatePlayerStats()
             }
         }
 
