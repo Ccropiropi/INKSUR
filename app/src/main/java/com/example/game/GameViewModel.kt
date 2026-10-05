@@ -114,8 +114,14 @@ data class PlayerState(
     var pickupRadius: Float = 110f,
     var attackSpeedMultiplier: Float = 1.0f,
     var damageMultiplier: Float = 1.0f,
+    var xpMultiplier: Float = 1.0f,
+    var bonusProjectiles: Int = 0,
+    var cooldownMultiplier: Float = 1.0f,
+    var aoeMultiplier: Float = 1.0f,
+    var projectileBounces: Int = 0,
+    var bounceDamageDelta: Float = 0f,
     var xp: Int = 0,
-    var xpNeeded: Int = 8,
+    var xpNeeded: Int = 11,
     var level: Int = 1,
     var isInvincible: Boolean = false,
     var invincibleTimer: Float = 0f
@@ -228,7 +234,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         metaAtkLevel = 10,
                         metaSpeedLevel = 10,
                         metaMagnetLevel = 10,
-                        unlockedCharacters = "calligrapher,painter,scholar,master,celestial",
+                        unlockedCharacters = "calligrapher,scholar,grandmaster,runesmith",
                         unlockedMapTier = 3
                     )
                 )
@@ -254,6 +260,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleDevTestingMode() {
+        if (!com.example.BuildConfig.DEBUG) return
         applyDevTestingMode(!isDevTestingMode)
     }
 
@@ -408,6 +415,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var passiveBonusPickup: Float = 0f
     var passiveBonusAttackSpeed: Float = 0f
 
+    // P0-1 Telemetry tracking
+    var totalXpCollected: Long = 0L
+        private set
+    private val loggedTelemetryMinutes = mutableSetOf<Int>()
+
+    // P0-2 Polynomial XP curve calculation: 6 + 5L + 0.35L^2
+    fun calculateXpNeeded(level: Int): Int = (6 + 5 * level + 0.35f * level * level).toInt()
+
     // Pacing Bosses & Events
     private var titanSpawned: Boolean = false
     private var midBossSpawned: Boolean = false
@@ -428,6 +443,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     // Trait Awakening sub-window state
     private var pendingTraitSpellId: String? = null
+    private var pendingTraitTargetRank: Int = 3
 
     // RNG Mitigation: The Blank Scroll injection
     private var guaranteedNextItem: LevelUpChoice? = null
@@ -493,11 +509,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         player.pickupRadius = 110f * metaMagnetMult * character.pickupRadiusMultiplier
         player.attackSpeedMultiplier = 1.0f
         player.damageMultiplier = 1.0f * metaAtkMult * character.damageMultiplier
+        player.xpMultiplier = character.xpMultiplier
+        player.bonusProjectiles = character.bonusProjectiles
+        player.cooldownMultiplier = character.cooldownMultiplier
+        player.aoeMultiplier = character.aoeMultiplier
+        player.projectileBounces = 0
+        player.bounceDamageDelta = 0f
         player.xp = 0
-        player.xpNeeded = 8
+        player.xpNeeded = calculateXpNeeded(1)
         player.level = 1
         player.isInvincible = false
         player.invincibleTimer = 0f
+        totalXpCollected = 0L
+        loggedTelemetryMinutes.clear()
 
         // Reset simulation lists
         enemies.clear()
@@ -545,6 +569,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         masteryManager.reset()
         completedSyntheses.clear()
         pendingTraitSpellId = null
+        pendingTraitTargetRank = 3
         guaranteedNextItem = null
         magnumOpusTriggered = false
         magnumOpusFreezeTimer = 0f
@@ -863,7 +888,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         for (spell in currentState.activeSpells) {
             spell.cooldownTimer -= clampedDt
             if (spell.cooldownTimer <= 0f) {
-                spell.cooldownTimer = spell.getEffectiveCooldown(player.attackSpeedMultiplier)
+                spell.cooldownTimer = spell.getEffectiveCooldown(player.attackSpeedMultiplier, player.cooldownMultiplier)
                 castSpell(spell, currentState.character)
             }
         }
@@ -1113,6 +1138,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // 11.4 Telemetry Milestones (P0-1: Log level, kills, XP/min, enemies alive at min 2, 5, 10, 20, 30)
+        val telemetryMilestones = listOf(2, 5, 10, 20, 30)
+        for (m in telemetryMilestones) {
+            if (newTime >= m * 60f && !loggedTelemetryMinutes.contains(m)) {
+                loggedTelemetryMinutes.add(m)
+                val xpPerMin = if (newTime > 0f) (totalXpCollected / (newTime / 60f)).toInt() else 0
+                android.util.Log.i(
+                    "InkSurvivorTelemetry",
+                    "[TELEMETRY] Minute: $m | Level: ${player.level} | Kills: ${_uiState.value.kills} | TotalXP: $totalXpCollected | XP/min: $xpPerMin | EnemiesAlive: ${enemies.size}"
+                )
+            }
+        }
+
         // 12. Demanding Spawn Rate Scaling & Capping (Smooth acceleration demanding active combat)
         val hpMultiplier = if (newTime <= 1800f) {
             1.0f + (newTime / 1800f) * 3.2f
@@ -1128,26 +1166,32 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         // Spawn interval gets progressively demanding (more enemies over time!)
         val spawnInterval = when {
-            newTime < 300f -> 1.0f - (newTime / 300f) * 0.35f          // 1.0s down to 0.65s
-            newTime < 900f -> 0.65f - ((newTime - 300f) / 600f) * 0.25f // 0.65s down to 0.40s
-            newTime < 1500f -> 0.40f - ((newTime - 900f) / 600f) * 0.18f// 0.40s down to 0.22s
-            else -> (0.22f - ((newTime - 1500f) / 1500f) * 0.10f).coerceAtLeast(0.10f) // 0.22s down to 0.10s
+            newTime < 180f -> 0.65f - (newTime / 180f) * 0.22f          // 0.65s down to 0.43s
+            newTime < 600f -> 0.43f - ((newTime - 180f) / 420f) * 0.17f // 0.43s down to 0.26s
+            newTime < 1200f -> 0.26f - ((newTime - 600f) / 600f) * 0.10f// 0.26s down to 0.16s
+            else -> (0.16f - ((newTime - 1200f) / 1800f) * 0.07f).coerceAtLeast(0.09f) // 0.16s down to 0.09s
         }
 
-        // Cap enemy count to keep performance locked at 60fps and avoid off-screen stalls
+        // Target: 30+ enemies alive at minute 5, 80+ at minute 10
         val maxEnemies = when {
-            newTime < 600f -> 75
-            newTime < 1500f -> 75 + ((newTime - 600f) / 900f * 45f).toInt() // 75 -> 120
+            newTime < 180f -> 45 + ((newTime / 180f) * 25f).toInt() // 45 -> 70
+            newTime < 300f -> 70 + (((newTime - 180f) / 120f) * 20f).toInt() // 70 -> 90
+            newTime < 600f -> 90 + (((newTime - 300f) / 300f) * 25f).toInt() // 90 -> 115
+            newTime < 1200f -> 115 + (((newTime - 600f) / 600f) * 25f).toInt() // 115 -> 140
             else -> 140
         }
 
         enemySpawnTimer += clampedDt
         if (enemySpawnTimer >= spawnInterval && enemies.size < maxEnemies && !enemySpawningHalted && !theEraserBoss.active) {
             enemySpawnTimer = 0f
-            if (newTime > 1500f && Random.nextFloat() < 0.55f) {
+            val swarmChance = if (newTime >= 1500f) 0.55f else if (newTime >= 300f) 0.35f else if (newTime >= 180f) 0.20f else 0f
+            if (Random.nextFloat() < swarmChance) {
                 spawnHordeSwarm(hpMultiplier, speedMultiplier)
             } else {
-                spawnEnemyOutsideViewport(hpMultiplier, speedMultiplier)
+                val spawnCount = if (newTime >= 300f && enemies.size + 2 <= maxEnemies && Random.nextFloat() < 0.4f) 2 else 1
+                for (i in 0 until spawnCount) {
+                    spawnEnemyOutsideViewport(hpMultiplier, speedMultiplier)
+                }
             }
         }
 
@@ -1217,6 +1261,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (enemy.slowTimer <= 0f) enemy.slowRatio = 0f
             }
 
+            if (enemy.snareTimer > 0f) {
+                enemy.snareTimer -= clampedDt
+                if (enemy.snareTimer <= 0f) enemy.isSnared = false
+            }
+
             // Pathfinding: The Blotter pathfinds to densest puddle cluster; other enemies chase player
             if (enemy.isBlotter) {
                 val targetPuddle = puddlePool.pool.filter { it.active }
@@ -1253,17 +1302,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     enemy.y += enemy.vy * clampedDt
                 }
 
-                // Enemy-to-enemy soft-body separation
+                // Enemy-to-enemy soft-body separation (optimized with squared distance)
                 for (other in enemies) {
                     if (other.id == enemy.id) continue
                     val sepDx = enemy.x - other.x
                     val sepDy = enemy.y - other.y
-                    val sepDist = hypot(sepDx, sepDy)
+                    val distSq = sepDx * sepDx + sepDy * sepDy
                     val minDist = enemy.type.radius + other.type.radius
-                    if (sepDist < minDist && sepDist > 0.05f) {
+                    val minDistSq = minDist * minDist
+                    if (distSq < minDistSq && distSq > 0.0025f) {
+                        val sepDist = kotlin.math.sqrt(distSq)
                         val overlap = (minDist - sepDist) * 0.5f
-                        val sepNx = sepDx / sepDist
-                        val sepNy = sepDy / sepDist
+                        val invDist = 1.0f / sepDist
+                        val sepNx = sepDx * invDist
+                        val sepNy = sepDy * invDist
                         enemy.x += sepNx * overlap * 0.12f
                         enemy.y += sepNy * overlap * 0.12f
                     }
@@ -1337,11 +1389,27 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
                     if (remaining <= 0) {
                         elitePackCounts.remove(packId)
-                        spawnSpellRuneDrop(enemy.x, enemy.y, SpellRuneType.VISCOUS_RUNE)
+                        val droppedRune = SpellRuneType.values().random()
+                        spawnSpellRuneDrop(enemy.x, enemy.y, droppedRune)
                         spawnObelisk(enemy.x + 20f, enemy.y + 20f)
                         soundManager.playReactionBoom()
                     }
-                } else {
+                }
+
+                // Detonating Mark on death explosion
+                if (enemy.isMarkedForDetonation) {
+                    val markRadius = 140f
+                    val markDmg = 85f
+                    soundManager.playReactionBoom()
+                    spawnInkFluidSplash(enemy.x, enemy.y, count = 8, isCritOrBleed = true, baseDmg = markDmg)
+                    for (other in enemies) {
+                        if (other.id != enemy.id && hypot(other.x - enemy.x, other.y - enemy.y) <= markRadius) {
+                            damageEnemy(other, markDmg)
+                        }
+                    }
+                }
+
+                if (!enemy.isBlotter && enemy.type != EnemyType.THE_TITAN && enemy.type != EnemyType.MID_BOSS_COLOSSUS) {
                     val isAboveMin25 = newTime >= 1500f || isDevTestingMode
                     val orbTier = when {
                         !isAboveMin25 -> 1 // Only lowest tier for lowest tier enemy before minute 25
@@ -1571,7 +1639,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         val hasRuler = _uiState.value.equippedArtifacts.any { it.id == ArtifactDefinition.TheFracturedRuler.id }
         val isGeometryMastered = masteryManager.isSacredGeometryMastered
-        val bounceCount = if (hasRuler) 5 else 0
+        val totalArtifactBounces = _uiState.value.equippedArtifacts.sumOf { it.projectileBounces }
+        val bounceCount = (if (hasRuler) 5 else 0) + totalArtifactBounces + player.projectileBounces
         val bounceDelta = if (hasRuler) {
             if (isGeometryMastered) 1.30f else 0.70f
         } else 1.0f
@@ -1633,29 +1702,37 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         facingDir
                     }
 
-                    inkProjectiles.add(
-                        InkProjectile(
-                            id = ++entityIdCounter,
-                            x = player.x,
-                            y = player.y,
-                            vx = cos(shootAngle) * speed,
-                            vy = sin(shootAngle) * speed,
-                            angleRad = shootAngle,
-                            damage = damage,
-                            pierceCount = pierce,
-                            strokeLength = activeSpell.definition.projectileLength,
-                            strokeWidth = activeSpell.definition.projectileWidth,
-                            isFlexNib = isFlexNib,
-                            isSerratedNib = isSerratedNib,
-                            isHarpoon = isHarpoon,
-                            sourceSpellId = activeSpell.definition.id,
-                            hasViscousRune = hasViscous,
-                            bounceRemaining = bounceCount,
-                            bounceDamageMultiplier = bounceDelta,
-                            isSacredGeometry = hasRuler,
-                            isGeometryCured = isGeometryMastered
+                    val extraProj = character.bonusProjectiles + player.bonusProjectiles
+                    val totalProjCount = 1 + extraProj
+                    val spreadAngle = 0.12f // gentle calligraphic fan
+                    val startAngle = shootAngle - ((totalProjCount - 1) * spreadAngle) / 2f
+
+                    for (pIdx in 0 until totalProjCount) {
+                        val currentAngle = startAngle + pIdx * spreadAngle
+                        inkProjectiles.add(
+                            InkProjectile(
+                                id = ++entityIdCounter,
+                                x = player.x,
+                                y = player.y,
+                                vx = cos(currentAngle) * speed,
+                                vy = sin(currentAngle) * speed,
+                                angleRad = currentAngle,
+                                damage = damage,
+                                pierceCount = pierce,
+                                strokeLength = activeSpell.definition.projectileLength,
+                                strokeWidth = activeSpell.definition.projectileWidth,
+                                isFlexNib = isFlexNib,
+                                isSerratedNib = isSerratedNib,
+                                isHarpoon = isHarpoon,
+                                sourceSpellId = activeSpell.definition.id,
+                                hasViscousRune = hasViscous,
+                                bounceRemaining = bounceCount,
+                                bounceDamageMultiplier = bounceDelta,
+                                isSacredGeometry = hasRuler,
+                                isGeometryCured = isGeometryMastered
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -1706,7 +1783,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 } else {
                     val isWideBristle = activeSpell.hasTrait(SpellTraitType.WIDE_BRISTLE.id)
-                    val arcRadius = if (isWideBristle) activeSpell.definition.arcRadius * 1.25f else activeSpell.definition.arcRadius
+                    val arcRadius = (if (isWideBristle) activeSpell.definition.arcRadius * 1.25f else activeSpell.definition.arcRadius) * player.aoeMultiplier
                     val arcSpan = if (isWideBristle) activeSpell.definition.arcAngleSpanRad * 1.4f else activeSpell.definition.arcAngleSpanRad
 
                     washBrushVisuals.add(
@@ -1739,7 +1816,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     // Leave 2D pooled ink puddle decal
-                    val puddleRadius = if (activeSpell.hasTrait(SpellTraitType.DEEP_WELL.id)) 48f else 36f
+                    val puddleRadius = (if (activeSpell.hasTrait(SpellTraitType.DEEP_WELL.id)) 48f else 36f) * player.aoeMultiplier
                     val puddleDmg = damage * 0.40f
                     val puddleMaxLife = if (activeSpell.hasTrait(SpellTraitType.DEEP_WELL.id)) 6.0f else 4.0f
                     puddlePool.obtain(
@@ -1818,7 +1895,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val hasVolatile = activeSpell.hasTrait(SpellTraitType.VOLATILE_CORE.id)
-                val sealRadius = if (hasVolatile) activeSpell.definition.arcRadius * 1.45f else activeSpell.definition.arcRadius
+                val sealRadius = (if (hasVolatile) activeSpell.definition.arcRadius * 1.45f else activeSpell.definition.arcRadius) * player.aoeMultiplier
                 val sealDmg = if (hasVolatile) damage * 1.55f else damage
 
                 cinnabarSeals.add(
@@ -1836,7 +1913,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             SpellCastType.FOOTPRINT_TRAIL -> {
                 // Searing sumi-e footprints / wake trail behind the player
                 // Properties: size (areaRadius), duration (durationSeconds), damage
-                val trailRadius = activeSpell.getEffectiveAreaRadius()
+                val trailRadius = activeSpell.getEffectiveAreaRadius(player.aoeMultiplier)
                 val trailDuration = activeSpell.getEffectiveDuration()
                 val trailDmg = damage * 0.45f
 
@@ -2369,7 +2446,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 GearType.DENSE_SOOT -> totalDmgMult += 0.20f * g.stacks
                 GearType.SCRIBES_SANDAL -> totalSpeedAdd += 30f * g.stacks
                 GearType.LODESTONE_INKWELL -> currentPickupRadius += (45f * g.stacks)
-                GearType.SPRING_WATER -> {}
+                GearType.SPRING_WATER -> {
+                    // P1: SPRING_WATER gear provides vitality (+15% Max HP per stack)
+                    maxHpMult += 0.15f * g.stacks
+                }
             }
         }
         player.pickupRadius = currentPickupRadius
@@ -2388,6 +2468,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         player.attackSpeedMultiplier = totalAttackSpeed.coerceAtLeast(0.2f)
         player.maxHp = ((100f + passiveBonusHp) * maxHpMult).coerceAtLeast(20f)
         player.hp = player.hp.coerceAtMost(player.maxHp)
+        player.projectileBounces = artifacts.sumOf { it.projectileBounces }
     }
 
     private fun spawnSpellRuneDrop(x: Float, y: Float, runeType: SpellRuneType) {
@@ -2795,15 +2876,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun collectOrb(orb: Orb) {
-        player.xp += orb.value
+        val earnedXp = (orb.value * player.xpMultiplier).toInt().coerceAtLeast(1)
+        player.xp += earnedXp
+        totalXpCollected += earnedXp
         soundManager.triggerHaptic(SoundManager.VibrationType.LIGHT)
 
         if (player.xp >= player.xpNeeded) {
             player.xp -= player.xpNeeded
             player.level++
-            player.xpNeeded = (player.xpNeeded * 1.35f).toInt() + 2
+            player.xpNeeded = calculateXpNeeded(player.level)
 
-            // Phase 4 Milestone Tracker: Levels 35, 60, 95
+            // Phase 4 Milestone Tracker: Levels 25, 40, 55 (re-gated in SynthesisManager)
             val newlyUnlocked = synthesisManager.onLevelReached(player.level)
             if (newlyUnlocked) {
                 soundManager.playLevelUp()
@@ -2815,8 +2898,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 slot3Unlocked = synthesisManager.slot3Unlocked
             )
 
-            // Phase 4 Level 100 Magnum Opus check
-            if (player.level >= 100 && !magnumOpusTriggered) {
+            // Phase 4 Magnum Opus check (gated on 3 evolutions completed or level 55+)
+            if ((player.level >= 55 || completedSyntheses.size >= 3) && !magnumOpusTriggered) {
                 checkMagnumOpusUltimate()
             }
 
@@ -2873,7 +2956,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             synthesisRecipe = null
         )
 
-        if (player.level >= 100 && !magnumOpusTriggered) {
+        if ((player.level >= 55 || completedSyntheses.size >= 3) && !magnumOpusTriggered) {
             checkMagnumOpusUltimate()
         }
     }
@@ -3044,27 +3127,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             is LevelUpChoice.SpellLevelChoice -> {
                 val spell = _uiState.value.activeSpells.find { it.definition.id == choice.spellId }
                 if (spell != null) {
-                    if (choice.targetRank == 3) {
-                        // Level 3 Trait Awakening: Open dedicated new window
+                    if (choice.targetRank in listOf(3, 5, 7)) {
+                        // Trait Awakening at Ranks 3, 5, 7: Open dedicated selection window
                         pendingTraitSpellId = spell.definition.id
-                        val traitOptions = when (spell.definition.id) {
-                            "quill_dart" -> listOf(SpellTraitType.SERRATED_NIB, SpellTraitType.FLEX_NIB)
-                            "wash_brush" -> listOf(SpellTraitType.WIDE_BRISTLE, SpellTraitType.DEEP_WELL)
-                            "steel_fountain" -> listOf(SpellTraitType.RAZOR_FLOW, SpellTraitType.PRESSURIZED_INK)
-                            "orbital_runes" -> listOf(SpellTraitType.ASTRAL_EXPANSION, SpellTraitType.RAPID_ROTATION)
-                            "cinnabar_seal" -> listOf(SpellTraitType.CHAIN_REACTION, SpellTraitType.VOLATILE_CORE)
-                            else -> listOf(SpellTraitType.SERRATED_NIB, SpellTraitType.FLEX_NIB)
+                        pendingTraitTargetRank = choice.targetRank
+                        val traitOptions = SpellTraitType.getTraitsForSpell(spell.definition.id, choice.targetRank)
+                        if (traitOptions.isNotEmpty()) {
+                            _uiState.value = _uiState.value.copy(
+                                screen = ScreenState.TRAIT_SELECTION,
+                                pendingTraitSpellName = "${spell.definition.name} (Rank ${choice.targetRank})",
+                                pendingTraitOptions = traitOptions
+                            )
+                            return
                         }
-
-                        _uiState.value = _uiState.value.copy(
-                            screen = ScreenState.TRAIT_SELECTION,
-                            pendingTraitSpellName = spell.definition.name,
-                            pendingTraitOptions = traitOptions
-                        )
-                        return
-                    } else {
-                        spell.rank = choice.targetRank
                     }
+                    spell.rank = choice.targetRank
                 }
             }
 
@@ -3117,19 +3194,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val targetId = pendingTraitSpellId ?: return
         val spell = _uiState.value.activeSpells.find { it.definition.id == targetId }
         if (spell != null) {
-            spell.rank = 3
-            val module: SpellTraitModule = when (traitType) {
-                SpellTraitType.SERRATED_NIB -> SerratedNibTrait
-                SpellTraitType.FLEX_NIB -> FlexNibTrait
-                SpellTraitType.WIDE_BRISTLE -> WideBristleTrait
-                SpellTraitType.DEEP_WELL -> DeepWellTrait
-                SpellTraitType.RAZOR_FLOW -> RazorFlowTrait
-                SpellTraitType.PRESSURIZED_INK -> PressurizedInkTrait
-                SpellTraitType.ASTRAL_EXPANSION -> AstralExpansionTrait
-                SpellTraitType.RAPID_ROTATION -> RapidRotationTrait
-                SpellTraitType.CHAIN_REACTION -> ChainReactionTrait
-                SpellTraitType.VOLATILE_CORE -> VolatileCoreTrait
-            }
+            spell.rank = maxOf(spell.rank, pendingTraitTargetRank)
+            val module: SpellTraitModule = SpellTraitType.getModule(traitType)
             if (!spell.traitModules.any { it.id == module.id }) {
                 spell.traitModules.add(module)
             }
@@ -3152,6 +3218,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             existing.stacks++
         } else {
             gearList.add(EquippedGear(type, 1))
+        }
+
+        if (type == GearType.SPRING_WATER) {
+            player.hp = (player.hp + 25f).coerceAtMost(player.maxHp)
         }
 
         _uiState.value = _uiState.value.copy(equippedGear = gearList)

@@ -13,6 +13,7 @@ data class CharacterDefinition(
     val pickupRadiusMultiplier: Float = 1.0f,
     val cooldownMultiplier: Float = 1.0f,
     val bonusProjectiles: Int = 0,
+    val aoeMultiplier: Float = 1.0f,
     val crystalUnlockCost: Int = 0
 ) {
     companion object {
@@ -57,6 +58,7 @@ data class CharacterDefinition(
             title = "Architect of the Outer Glyphs",
             description = "+25% Area of Effect, +15% Damage to all sigils and elemental glyphs.",
             damageMultiplier = 1.15f,
+            aoeMultiplier = 1.25f,
             crystalUnlockCost = 75
         )
 
@@ -141,9 +143,9 @@ data class ClassDefinition(
         // ROW 2
         val Witch = ClassDefinition(
             id = "witch",
-            name = "Witch",
-            role = "Hex Effigy Master",
-            description = "Curse effigies that trigger sudden localized combustions beneath enemy clusters.",
+            name = "Hex Inker",
+            role = "Hex Effigy Calligrapher",
+            description = "Inscribes curse effigies that trigger sudden localized combustions beneath enemy clusters.",
             starterSpell = SpellDefinition.CinnabarSeal,
             glyphType = "VOODOO_DOLL",
             glyphColorHex = 0xFFECEFF1,
@@ -189,8 +191,8 @@ data class ClassDefinition(
 
         val Druid = ClassDefinition(
             id = "druid",
-            name = "Druid",
-            role = "Verdant Tree of Life",
+            name = "Grove Calligrapher",
+            role = "Verdant Ink Harmonizer",
             description = "Sweeps the ground with organic foliage wash leaving damaging ink pools.",
             starterSpell = SpellDefinition.WashBrush,
             glyphType = "TREE_RUNE",
@@ -214,8 +216,8 @@ data class ClassDefinition(
 
         val Shaman = ClassDefinition(
             id = "shaman",
-            name = "Shaman",
-            role = "Thunder Palm Invoker",
+            name = "Spirit Medium",
+            role = "Spiritual Ink Channeler",
             description = "Channels atmospheric ink lightning into rapid needle strikes.",
             starterSpell = SpellDefinition.SteelFountain,
             glyphType = "LIGHTNING_HAND",
@@ -360,9 +362,9 @@ data class ClassDefinition(
 
         val Necromancer = ClassDefinition(
             id = "necromancer",
-            name = "Necromancer",
-            role = "Weeping Skull Harvester",
-            description = "Fires bone-needle steel fountains that consume fallen essences.",
+            name = "Sepulcher Scribe",
+            role = "Tomb Scripture Master",
+            description = "Fires bone-needle steel fountains that consume fallen essences and shatter paper hordes.",
             starterSpell = SpellDefinition.SteelFountain,
             glyphType = "SKULL_VISAGE",
             glyphColorHex = 0xFFE1F5FE,
@@ -396,7 +398,7 @@ enum class SpellTraitType(
     val displayName: String,
     val description: String
 ) {
-    // Quill Dart Traits (Level 3 Choice)
+    // Quill Dart Traits (Ranks 3, 5, 7)
     SERRATED_NIB(
         id = "serrated_nib",
         displayName = "Serrated Nib",
@@ -407,8 +409,28 @@ enum class SpellTraitType(
         displayName = "Flex Nib",
         description = "The projectile scales up in physical size by 2% for every frame it travels."
     ),
+    SPLIT_SHARD(
+        id = "split_shard",
+        displayName = "Split Shard",
+        description = "Projectiles split into two angled piercing quill darts upon impacting enemies."
+    ),
+    BOOMERANG_NIB(
+        id = "boomerang_nib",
+        displayName = "Boomerang Nib",
+        description = "Quill darts reverse flight direction at max range, returning to shred foes again."
+    ),
+    DETONATING_MARK(
+        id = "detonating_mark",
+        displayName = "Detonating Mark",
+        description = "Enemies hit are branded with dark ink; marked foes detonate violently upon death."
+    ),
+    VORTEX_TIP(
+        id = "vortex_tip",
+        displayName = "Vortex Tip",
+        description = "Carves micro-vacuums along its trajectory, pulling surrounding paper horrors inward."
+    ),
 
-    // Wash Brush Traits (Level 3 Choice)
+    // Wash Brush Traits (Ranks 3, 5, 7)
     WIDE_BRISTLE(
         id = "wide_bristle",
         displayName = "Wide Bristle",
@@ -419,8 +441,28 @@ enum class SpellTraitType(
         displayName = "Deep Well",
         description = "Ink puddles linger for 6.0s (up from 4.0s) and tick damage every 0.35s."
     ),
+    VISCOUS_TAR(
+        id = "viscous_tar",
+        displayName = "Viscous Tar",
+        description = "Puddles turn to thick black tar, reducing enemy movement speed by 50%."
+    ),
+    VOLATILE_VAPOR(
+        id = "volatile_vapor",
+        displayName = "Volatile Vapor",
+        description = "Expiring puddles release pressurized caustic vapor plumes that damage surrounding foes."
+    ),
+    RESERVOIR_MERGE(
+        id = "reservoir_merge",
+        displayName = "Reservoir Surge",
+        description = "Adjacent ink pools merge into an amplified lake that deals doubled damage."
+    ),
+    CAUSTIC_DELUGE(
+        id = "caustic_deluge",
+        displayName = "Caustic Deluge",
+        description = "Corrosive fluid liquefies paper fibers, completely stripping enemy armor."
+    ),
 
-    // Steel Fountain Traits (Level 3 Choice)
+    // Steel Fountain Traits (Ranks 3, 5, 7)
     RAZOR_FLOW(
         id = "razor_flow",
         displayName = "Razor Flow",
@@ -431,8 +473,28 @@ enum class SpellTraitType(
         displayName = "Pressurized Ink",
         description = "Needles explode on final impact into 3 mini ink shrapnel droplets."
     ),
+    RICOCHET_NEEDLES(
+        id = "ricochet_needles",
+        displayName = "Ricochet Needles",
+        description = "Needles ricochet between nearby enemies or canvas boundaries up to 2 times."
+    ),
+    NEEDLE_FAN(
+        id = "needle_fan",
+        displayName = "Needle Fan",
+        description = "Fires needles in a sweeping 60-degree radial fan covering wide enemy clusters."
+    ),
+    GATLING_BURST(
+        id = "gatling_burst",
+        displayName = "Gatling Inscription",
+        description = "Greatly reduces cooldown and discharges rapid continuous needle volleys."
+    ),
+    EMBEDDED_DETONATOR(
+        id = "embedded_detonator",
+        displayName = "Micro Detonators",
+        description = "Needles embed into paper horrors and detonate in miniature ink bursts after 0.8s."
+    ),
 
-    // Orbital Runes Traits (Level 3 Choice)
+    // Orbital Runes Traits (Ranks 3, 5, 7)
     ASTRAL_EXPANSION(
         id = "astral_expansion",
         displayName = "Astral Expansion",
@@ -443,8 +505,28 @@ enum class SpellTraitType(
         displayName = "Rapid Rotation",
         description = "+60% Orbit Rotation Speed and applies 40% Viscous Slow on contact."
     ),
+    ELLIPTICAL_PULSE(
+        id = "elliptical_pulse",
+        displayName = "Elliptical Pulse",
+        description = "Orbit rhythmically expands and contracts, sweeping a dynamic zone around the hero."
+    ),
+    AEGIS_BARRIER(
+        id = "aegis_barrier",
+        displayName = "Aegis Barrier",
+        description = "Orbiting runes absorb contact with paper horrors, knocking them backward."
+    ),
+    GRAVITATIONAL_RING(
+        id = "gravitational_ring",
+        displayName = "Gravitational Ring",
+        description = "Celestial perimeter pulls orbs and paper enemies directly into the spinning runes."
+    ),
+    BINARY_CONSTELLATION(
+        id = "binary_constellation",
+        displayName = "Binary Constellation",
+        description = "Summons a second concentric counter-rotating ring of orbital celestial runes."
+    ),
 
-    // Cinnabar Seal Traits (Level 3 Choice)
+    // Cinnabar Seal Traits (Ranks 3, 5, 7)
     CHAIN_REACTION(
         id = "chain_reaction",
         displayName = "Chain Reaction",
@@ -454,7 +536,105 @@ enum class SpellTraitType(
         id = "volatile_core",
         displayName = "Volatile Core",
         description = "+45% Blast Radius and +55% Detonation Shockwave Damage."
-    )
+    ),
+    SEAL_ROOT(
+        id = "seal_root",
+        displayName = "Binding Inscription",
+        description = "Glyphs root and paralyze paper constructs inside the seal zone until detonation."
+    ),
+    DUAL_IMPRINT(
+        id = "dual_imprint",
+        displayName = "Dual Imprint",
+        description = "Inscribes two linked cinnabar seals simultaneously with synchronized detonations."
+    ),
+    INFERNO_RESIDUE(
+        id = "inferno_residue",
+        displayName = "Inferno Residue",
+        description = "Leaves a lingering pool of raging cinnabar flame that burns enemies for 4.0s."
+    ),
+    GRAVITATIONAL_CRATER(
+        id = "gravitational_crater",
+        displayName = "Singularity Well",
+        description = "Pulls all surrounding enemies into the epicenter right before detonation."
+    );
+
+    companion object {
+        fun getTraitsForSpell(spellId: String, rank: Int): List<SpellTraitType> {
+            return when (spellId) {
+                "quill_dart" -> when (rank) {
+                    3 -> listOf(SERRATED_NIB, FLEX_NIB)
+                    5 -> listOf(SPLIT_SHARD, BOOMERANG_NIB)
+                    7 -> listOf(DETONATING_MARK, VORTEX_TIP)
+                    else -> emptyList()
+                }
+                "wash_brush" -> when (rank) {
+                    3 -> listOf(WIDE_BRISTLE, DEEP_WELL)
+                    5 -> listOf(VISCOUS_TAR, VOLATILE_VAPOR)
+                    7 -> listOf(RESERVOIR_MERGE, CAUSTIC_DELUGE)
+                    else -> emptyList()
+                }
+                "steel_fountain" -> when (rank) {
+                    3 -> listOf(RAZOR_FLOW, PRESSURIZED_INK)
+                    5 -> listOf(RICOCHET_NEEDLES, NEEDLE_FAN)
+                    7 -> listOf(GATLING_BURST, EMBEDDED_DETONATOR)
+                    else -> emptyList()
+                }
+                "orbital_runes" -> when (rank) {
+                    3 -> listOf(ASTRAL_EXPANSION, RAPID_ROTATION)
+                    5 -> listOf(ELLIPTICAL_PULSE, AEGIS_BARRIER)
+                    7 -> listOf(GRAVITATIONAL_RING, BINARY_CONSTELLATION)
+                    else -> emptyList()
+                }
+                "cinnabar_seal" -> when (rank) {
+                    3 -> listOf(CHAIN_REACTION, VOLATILE_CORE)
+                    5 -> listOf(SEAL_ROOT, DUAL_IMPRINT)
+                    7 -> listOf(INFERNO_RESIDUE, GRAVITATIONAL_CRATER)
+                    else -> emptyList()
+                }
+                else -> when (rank) {
+                    3 -> listOf(SERRATED_NIB, FLEX_NIB)
+                    5 -> listOf(SPLIT_SHARD, BOOMERANG_NIB)
+                    7 -> listOf(DETONATING_MARK, VORTEX_TIP)
+                    else -> emptyList()
+                }
+            }
+        }
+
+        fun getModule(type: SpellTraitType): SpellTraitModule {
+            return when (type) {
+                SERRATED_NIB -> SerratedNibTrait
+                FLEX_NIB -> FlexNibTrait
+                SPLIT_SHARD -> SplitShardTrait
+                BOOMERANG_NIB -> BoomerangNibTrait
+                DETONATING_MARK -> DetonatingMarkTrait
+                VORTEX_TIP -> VortexTipTrait
+                WIDE_BRISTLE -> WideBristleTrait
+                DEEP_WELL -> DeepWellTrait
+                VISCOUS_TAR -> ViscousTarTrait
+                VOLATILE_VAPOR -> VolatileVaporTrait
+                RESERVOIR_MERGE -> ReservoirMergeTrait
+                CAUSTIC_DELUGE -> CausticDelugeTrait
+                RAZOR_FLOW -> RazorFlowTrait
+                PRESSURIZED_INK -> PressurizedInkTrait
+                RICOCHET_NEEDLES -> RicochetNeedlesTrait
+                NEEDLE_FAN -> NeedleFanTrait
+                GATLING_BURST -> GatlingBurstTrait
+                EMBEDDED_DETONATOR -> EmbeddedDetonatorTrait
+                ASTRAL_EXPANSION -> AstralExpansionTrait
+                RAPID_ROTATION -> RapidRotationTrait
+                ELLIPTICAL_PULSE -> EllipticalPulseTrait
+                AEGIS_BARRIER -> AegisBarrierTrait
+                GRAVITATIONAL_RING -> GravitationalRingTrait
+                BINARY_CONSTELLATION -> BinaryConstellationTrait
+                CHAIN_REACTION -> ChainReactionTrait
+                VOLATILE_CORE -> VolatileCoreTrait
+                SEAL_ROOT -> SealRootTrait
+                DUAL_IMPRINT -> DualImprintTrait
+                INFERNO_RESIDUE -> InfernoResidueTrait
+                GRAVITATIONAL_CRATER -> GravitationalCraterTrait
+            }
+        }
+    }
 }
 
 object SerratedNibTrait : SpellTraitModule {
@@ -479,6 +659,30 @@ object FlexNibTrait : SpellTraitModule {
     }
 }
 
+object SplitShardTrait : SpellTraitModule {
+    override val id = SpellTraitType.SPLIT_SHARD.id
+    override val name = SpellTraitType.SPLIT_SHARD.displayName
+    override val description = SpellTraitType.SPLIT_SHARD.description
+}
+
+object BoomerangNibTrait : SpellTraitModule {
+    override val id = SpellTraitType.BOOMERANG_NIB.id
+    override val name = SpellTraitType.BOOMERANG_NIB.displayName
+    override val description = SpellTraitType.BOOMERANG_NIB.description
+}
+
+object DetonatingMarkTrait : SpellTraitModule {
+    override val id = SpellTraitType.DETONATING_MARK.id
+    override val name = SpellTraitType.DETONATING_MARK.displayName
+    override val description = SpellTraitType.DETONATING_MARK.description
+}
+
+object VortexTipTrait : SpellTraitModule {
+    override val id = SpellTraitType.VORTEX_TIP.id
+    override val name = SpellTraitType.VORTEX_TIP.displayName
+    override val description = SpellTraitType.VORTEX_TIP.description
+}
+
 object WideBristleTrait : SpellTraitModule {
     override val id = SpellTraitType.WIDE_BRISTLE.id
     override val name = SpellTraitType.WIDE_BRISTLE.displayName
@@ -500,6 +704,30 @@ object DeepWellTrait : SpellTraitModule {
     }
 }
 
+object ViscousTarTrait : SpellTraitModule {
+    override val id = SpellTraitType.VISCOUS_TAR.id
+    override val name = SpellTraitType.VISCOUS_TAR.displayName
+    override val description = SpellTraitType.VISCOUS_TAR.description
+}
+
+object VolatileVaporTrait : SpellTraitModule {
+    override val id = SpellTraitType.VOLATILE_VAPOR.id
+    override val name = SpellTraitType.VOLATILE_VAPOR.displayName
+    override val description = SpellTraitType.VOLATILE_VAPOR.description
+}
+
+object ReservoirMergeTrait : SpellTraitModule {
+    override val id = SpellTraitType.RESERVOIR_MERGE.id
+    override val name = SpellTraitType.RESERVOIR_MERGE.displayName
+    override val description = SpellTraitType.RESERVOIR_MERGE.description
+}
+
+object CausticDelugeTrait : SpellTraitModule {
+    override val id = SpellTraitType.CAUSTIC_DELUGE.id
+    override val name = SpellTraitType.CAUSTIC_DELUGE.displayName
+    override val description = SpellTraitType.CAUSTIC_DELUGE.description
+}
+
 object RazorFlowTrait : SpellTraitModule {
     override val id = SpellTraitType.RAZOR_FLOW.id
     override val name = SpellTraitType.RAZOR_FLOW.displayName
@@ -510,6 +738,30 @@ object PressurizedInkTrait : SpellTraitModule {
     override val id = SpellTraitType.PRESSURIZED_INK.id
     override val name = SpellTraitType.PRESSURIZED_INK.displayName
     override val description = SpellTraitType.PRESSURIZED_INK.description
+}
+
+object RicochetNeedlesTrait : SpellTraitModule {
+    override val id = SpellTraitType.RICOCHET_NEEDLES.id
+    override val name = SpellTraitType.RICOCHET_NEEDLES.displayName
+    override val description = SpellTraitType.RICOCHET_NEEDLES.description
+}
+
+object NeedleFanTrait : SpellTraitModule {
+    override val id = SpellTraitType.NEEDLE_FAN.id
+    override val name = SpellTraitType.NEEDLE_FAN.displayName
+    override val description = SpellTraitType.NEEDLE_FAN.description
+}
+
+object GatlingBurstTrait : SpellTraitModule {
+    override val id = SpellTraitType.GATLING_BURST.id
+    override val name = SpellTraitType.GATLING_BURST.displayName
+    override val description = SpellTraitType.GATLING_BURST.description
+}
+
+object EmbeddedDetonatorTrait : SpellTraitModule {
+    override val id = SpellTraitType.EMBEDDED_DETONATOR.id
+    override val name = SpellTraitType.EMBEDDED_DETONATOR.displayName
+    override val description = SpellTraitType.EMBEDDED_DETONATOR.description
 }
 
 object AstralExpansionTrait : SpellTraitModule {
@@ -524,6 +776,30 @@ object RapidRotationTrait : SpellTraitModule {
     override val description = SpellTraitType.RAPID_ROTATION.description
 }
 
+object EllipticalPulseTrait : SpellTraitModule {
+    override val id = SpellTraitType.ELLIPTICAL_PULSE.id
+    override val name = SpellTraitType.ELLIPTICAL_PULSE.displayName
+    override val description = SpellTraitType.ELLIPTICAL_PULSE.description
+}
+
+object AegisBarrierTrait : SpellTraitModule {
+    override val id = SpellTraitType.AEGIS_BARRIER.id
+    override val name = SpellTraitType.AEGIS_BARRIER.displayName
+    override val description = SpellTraitType.AEGIS_BARRIER.description
+}
+
+object GravitationalRingTrait : SpellTraitModule {
+    override val id = SpellTraitType.GRAVITATIONAL_RING.id
+    override val name = SpellTraitType.GRAVITATIONAL_RING.displayName
+    override val description = SpellTraitType.GRAVITATIONAL_RING.description
+}
+
+object BinaryConstellationTrait : SpellTraitModule {
+    override val id = SpellTraitType.BINARY_CONSTELLATION.id
+    override val name = SpellTraitType.BINARY_CONSTELLATION.displayName
+    override val description = SpellTraitType.BINARY_CONSTELLATION.description
+}
+
 object ChainReactionTrait : SpellTraitModule {
     override val id = SpellTraitType.CHAIN_REACTION.id
     override val name = SpellTraitType.CHAIN_REACTION.displayName
@@ -536,17 +812,80 @@ object VolatileCoreTrait : SpellTraitModule {
     override val description = SpellTraitType.VOLATILE_CORE.description
 }
 
+object SealRootTrait : SpellTraitModule {
+    override val id = SpellTraitType.SEAL_ROOT.id
+    override val name = SpellTraitType.SEAL_ROOT.displayName
+    override val description = SpellTraitType.SEAL_ROOT.description
+}
+
+object DualImprintTrait : SpellTraitModule {
+    override val id = SpellTraitType.DUAL_IMPRINT.id
+    override val name = SpellTraitType.DUAL_IMPRINT.displayName
+    override val description = SpellTraitType.DUAL_IMPRINT.description
+}
+
+object InfernoResidueTrait : SpellTraitModule {
+    override val id = SpellTraitType.INFERNO_RESIDUE.id
+    override val name = SpellTraitType.INFERNO_RESIDUE.displayName
+    override val description = SpellTraitType.INFERNO_RESIDUE.description
+}
+
+object GravitationalCraterTrait : SpellTraitModule {
+    override val id = SpellTraitType.GRAVITATIONAL_CRATER.id
+    override val name = SpellTraitType.GRAVITATIONAL_CRATER.displayName
+    override val description = SpellTraitType.GRAVITATIONAL_CRATER.description
+}
+
 enum class SpellRuneType(
     val id: String,
     val displayName: String,
     val description: String,
-    val slowPercent: Float
+    val slowPercent: Float = 0f,
+    val infusedElement: CalligraphicElement? = null,
+    val isEchoChain: Boolean = false,
+    val isReaperBurst: Boolean = false
 ) {
     VISCOUS_RUNE(
         id = "viscous_rune",
         displayName = "Viscous Rune",
         description = "Applies 40% movement speed reduction to any enemy damaged by this spell.",
         slowPercent = 0.40f
+    ),
+    CINNABAR_INFUSION(
+        id = "cinnabar_infusion",
+        displayName = "Cinnabar Flame Rune",
+        description = "Infuses this spell with volatile Cinnabar Flame, causing burning DoT and feeding flame reactions.",
+        infusedElement = CalligraphicElement.CINNABAR_FLAME
+    ),
+    GLACIAL_INFUSION(
+        id = "glacial_infusion",
+        displayName = "Glacial Frost Rune",
+        description = "Infuses this spell with sub-zero Glacial Ink, freezing enemies on contact and priming cryo-shatter.",
+        infusedElement = CalligraphicElement.FROST
+    ),
+    CORROSIVE_INFUSION(
+        id = "corrosive_infusion",
+        displayName = "Corrosive Acid Rune",
+        description = "Infuses this spell with Corrosive Ink, melting enemy armor and soaking foes in caustic wash.",
+        infusedElement = CalligraphicElement.CORROSIVE_ACID
+    ),
+    ASTRAL_INFUSION(
+        id = "astral_infusion",
+        displayName = "Astral Resonance Rune",
+        description = "Infuses this spell with Cosmic Sigils, pulling reality and creating micro-gravitational nodes on hit.",
+        infusedElement = CalligraphicElement.CELESTIAL_ASTRAL
+    ),
+    ECHO_CHAIN_RUNE(
+        id = "echo_chain_rune",
+        displayName = "Echo Chain Rune",
+        description = "Attacks that strike an enemy split and arc piercing ink filaments to up to 2 nearby foes.",
+        isEchoChain = true
+    ),
+    REAPER_RUNE(
+        id = "reaper_rune",
+        displayName = "Reaper's Inscription Rune",
+        description = "Defeated enemies violently detonate into fluid ink droplets that damage adjacent horrors.",
+        isReaperBurst = true
     )
 }
 
@@ -795,18 +1134,79 @@ data class SpellDefinition(
             arcRadius = 135f
         )
 
+        val TheNineHeadedHydra = SpellDefinition(
+            id = "nine_headed_hydra",
+            name = "The Nine-Headed Hydra",
+            description = "Unleashes three giant undulating abyssal ink serpents that carve through the canvas, leaving toxic ink maelstroms.",
+            castType = SpellCastType.FLOWING_SERPENT,
+            baseDamage = 135f,
+            baseCooldown = 2.2f,
+            baseSpeed = 460f,
+            areaRadius = 55f,
+            durationSeconds = 6.0f
+        )
+
+        val TsunamiSurge = SpellDefinition(
+            id = "tsunami_surge",
+            name = "Tsunami Surge",
+            description = "Releases a colossal sweeping tidal wall of compressed black ink washing across the whole screen.",
+            castType = SpellCastType.WAVE_TRAIL,
+            baseDamage = 140f,
+            baseCooldown = 1.3f,
+            baseSpeed = 540f,
+            basePierce = 99999,
+            projectileLength = 160f,
+            projectileWidth = 45f
+        )
+
+        val CelestialChronometer = SpellDefinition(
+            id = "celestial_chronometer",
+            name = "Celestial Chronometer",
+            description = "Sweeps an expansive cosmic astrological dial that severely slows foes by 60% and deals crushing damage.",
+            castType = SpellCastType.ORBITAL_RUNES,
+            baseDamage = 95f,
+            baseCooldown = 1.9f,
+            arcRadius = 185f
+        )
+
+        val FrozenPermafrost = SpellDefinition(
+            id = "frozen_permafrost",
+            name = "Frozen Permafrost",
+            description = "Erupts an advancing glacier of black-ice spikes beneath enemies, instantly freezing and shattering hordes.",
+            castType = SpellCastType.DETONATION_SEAL,
+            baseDamage = 175f,
+            baseCooldown = 1.6f,
+            arcRadius = 160f
+        )
+
+        val CelestialVolcano = SpellDefinition(
+            id = "celestial_volcano",
+            name = "Celestial Volcano",
+            description = "Rains a torrential storm of molten cinnabar meteors that ignite permanent fiery pools across the canvas.",
+            castType = SpellCastType.DETONATION_SEAL,
+            baseDamage = 220f,
+            baseCooldown = 1.8f,
+            arcRadius = 190f
+        )
+
         val baseSpells = listOf(
             QuillDart, WashBrush, SteelFountain, OrbitalRunes, CinnabarSeal,
             CalligraphersWake, AbyssalSerpent, TidalBrushWave,
             ShadowShuriken, GlacialSpike, CinnabarMeteor, ChronoScribe
         )
-        val evolvedSpells = listOf(TheHarpoon, InkwellVortex, FountainBarrage)
+        val evolvedSpells = listOf(
+            TheHarpoon, InkwellVortex, FountainBarrage,
+            TheNineHeadedHydra, TsunamiSurge, CelestialChronometer,
+            FrozenPermafrost, CelestialVolcano
+        )
         val allSpells = listOf(
             QuillDart, WashBrush, SteelFountain,
             OrbitalRunes, CinnabarSeal,
             CalligraphersWake, AbyssalSerpent, TidalBrushWave,
             ShadowShuriken, GlacialSpike, CinnabarMeteor, ChronoScribe,
             TheHarpoon, InkwellVortex, FountainBarrage,
+            TheNineHeadedHydra, TsunamiSurge, CelestialChronometer,
+            FrozenPermafrost, CelestialVolcano,
             TheMastersDecree, TheRendingTide
         )
     }
@@ -853,7 +1253,61 @@ data class SpellSynthesisRecipe(
             description = "Evolves Steel Fountain into a rapid-fire omnidirectional needle storm."
         )
 
-        val allRecipes = listOf(HarpoonSynthesis, VortexSynthesis, BarrageSynthesis)
+        // Synthesis 4: Nine-Headed Hydra = Abyssal Serpent (Max) + Dense Soot (Max)
+        val HydraSynthesis = SpellSynthesisRecipe(
+            id = "synthesis_hydra",
+            name = "Nine-Headed Hydra",
+            requiredSpellId = "abyssal_serpent",
+            requiredGearId = "dense_soot",
+            evolvedSpell = SpellDefinition.TheNineHeadedHydra,
+            description = "Evolves Abyssal Serpent into a trio of giant undulating serpentine leviathans."
+        )
+
+        // Synthesis 5: Tsunami Surge = Tidal Cleave (Max) + Scribe's Sandal (Max)
+        val TsunamiSynthesis = SpellSynthesisRecipe(
+            id = "synthesis_tsunami",
+            name = "Tsunami Surge",
+            requiredSpellId = "tidal_brush_wave",
+            requiredGearId = "scribes_sandal",
+            evolvedSpell = SpellDefinition.TsunamiSurge,
+            description = "Evolves Tidal Cleave into a screen-clearing tidal deluge."
+        )
+
+        // Synthesis 6: Celestial Chronometer = Chronos Orbit (Max) + Lodestone Inkwell (Max)
+        val ChronometerSynthesis = SpellSynthesisRecipe(
+            id = "synthesis_chronometer",
+            name = "Celestial Chronometer",
+            requiredSpellId = "chrono_scribe",
+            requiredGearId = "lodestone_inkwell",
+            evolvedSpell = SpellDefinition.CelestialChronometer,
+            description = "Evolves Chronos Orbit into an immense cosmic clock of devastating gravitational reach."
+        )
+
+        // Synthesis 7: Frozen Permafrost = Glacial Spike (Max) + Heavy Vellum (Max)
+        val PermafrostSynthesis = SpellSynthesisRecipe(
+            id = "synthesis_permafrost",
+            name = "Frozen Permafrost",
+            requiredSpellId = "glacial_spike",
+            requiredGearId = "heavy_vellum",
+            evolvedSpell = SpellDefinition.FrozenPermafrost,
+            description = "Evolves Glacial Spike into a cascading wall of frozen black ice."
+        )
+
+        // Synthesis 8: Celestial Volcano = Cinnabar Meteor (Max) + Spring Water (Max)
+        val VolcanoSynthesis = SpellSynthesisRecipe(
+            id = "synthesis_volcano",
+            name = "Celestial Volcano",
+            requiredSpellId = "cinnabar_meteor",
+            requiredGearId = "spring_water",
+            evolvedSpell = SpellDefinition.CelestialVolcano,
+            description = "Evolves Cinnabar Meteor into apocalyptic volcanic eruptions across the canvas."
+        )
+
+        val allRecipes = listOf(
+            HarpoonSynthesis, VortexSynthesis, BarrageSynthesis,
+            HydraSynthesis, TsunamiSynthesis, ChronometerSynthesis,
+            PermafrostSynthesis, VolcanoSynthesis
+        )
     }
 }
 
@@ -925,9 +1379,9 @@ data class ActiveSpell(
 
     fun hasViscousRune(): Boolean = socketedRunes.contains(SpellRuneType.VISCOUS_RUNE)
 
-    fun getEffectiveCooldown(attackSpeedMultiplier: Float): Float {
+    fun getEffectiveCooldown(attackSpeedMultiplier: Float, cooldownMultiplier: Float = 1.0f): Float {
         val baseCd = definition.baseCooldown * (1f - (rank - 1) * 0.05f)
-        return (baseCd / attackSpeedMultiplier).coerceAtLeast(0.12f)
+        return (baseCd / attackSpeedMultiplier * cooldownMultiplier).coerceAtLeast(0.12f)
     }
 
     fun getEffectiveDamage(damageMultiplier: Float): Float {

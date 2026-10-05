@@ -1562,51 +1562,52 @@ fun OccultSettingsDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Dev Testing Mode Setting
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("menu_dev_mode_toggle"),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Dev Testing Mode Setting (Gated behind BuildConfig.DEBUG)
+                if (com.example.BuildConfig.DEBUG) {
+                    Spacer(modifier = Modifier.height(14.dp))
                     Row(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("menu_dev_mode_toggle"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.BugReport,
-                            contentDescription = null,
-                            tint = if (viewModel.isDevTestingMode) Color(0xFFFF4081) else Color(0xFF90CAF9),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Dev Testing (Unlocked All)",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BugReport,
+                                contentDescription = null,
+                                tint = if (viewModel.isDevTestingMode) Color(0xFFFF4081) else Color(0xFF90CAF9),
+                                modifier = Modifier.size(20.dp)
                             )
-                            Text(
-                                text = if (viewModel.isDevTestingMode) "Active: All characters, spells, max upgrades" else "Inactive: Clean progression starting from 0",
-                                fontSize = 10.sp,
-                                color = Color(0xFF888894)
-                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Dev Testing (Unlocked All)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = if (viewModel.isDevTestingMode) "Active: All characters, spells, max upgrades" else "Inactive: Clean progression starting from 0",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF888894)
+                                )
+                            }
                         }
-                    }
-                    Switch(
-                        checked = viewModel.isDevTestingMode,
-                        onCheckedChange = { checked ->
-                            viewModel.applyDevTestingMode(checked)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color(0xFFFF4081),
-                            checkedTrackColor = Color(0xFF4A1428)
+                        Switch(
+                            checked = viewModel.isDevTestingMode,
+                            onCheckedChange = { checked ->
+                                viewModel.applyDevTestingMode(checked)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFFF4081),
+                                checkedTrackColor = Color(0xFF4A1428)
+                            )
                         )
-                    )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

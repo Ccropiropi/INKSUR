@@ -27,7 +27,16 @@ data class InkProjectile(
     var bounceRemaining: Int = 0,
     var bounceDamageMultiplier: Float = 1.0f,
     var isSacredGeometry: Boolean = false,
-    var isGeometryCured: Boolean = false
+    var isGeometryCured: Boolean = false,
+    // P2 Behavioral Runes & Traits
+    val isEchoChain: Boolean = false,
+    val isReaperBurst: Boolean = false,
+    val isSplitShard: Boolean = false,
+    var isBoomerang: Boolean = false,
+    var isReturning: Boolean = false,
+    val isDetonatingMark: Boolean = false,
+    val isVortexTip: Boolean = false,
+    val isRicochet: Boolean = false
 ) {
     val hitEnemyIds: MutableSet<Long> = mutableSetOf()
 }
@@ -46,7 +55,10 @@ data class InkPuddle(
     var sourceSpellId: String = "wash_brush",
     var hasViscousRune: Boolean = false,
     var isBurningCalligraphy: Boolean = false,
-    var isFrozenInk: Boolean = false
+    var isFrozenInk: Boolean = false,
+    var isViscousTar: Boolean = false,
+    var isVolatileVapor: Boolean = false,
+    var isCausticDeluge: Boolean = false
 ) {
     val position: Offset get() = Offset(x, y)
 }
@@ -226,7 +238,10 @@ data class OrbitalRuneEntity(
     var orbitRadius: Float = 95f,
     var damage: Float = 28f,
     var hitCooldownTimer: Float = 0f,
-    var hasViscous: Boolean = false
+    var hasViscous: Boolean = false,
+    var isElliptical: Boolean = false,
+    var isGravitationalRing: Boolean = false,
+    var isAegisBarrier: Boolean = false
 )
 
 // Cinnabar Seal detonation glyph
@@ -241,7 +256,10 @@ data class CinnabarSealEntity(
     var detonated: Boolean = false,
     var blastTimer: Float = 0f,
     val blastDuration: Float = 0.35f,
-    var hasViscous: Boolean = false
+    var hasViscous: Boolean = false,
+    var isSealRoot: Boolean = false,
+    var isInfernoResidue: Boolean = false,
+    var isGravitationalCrater: Boolean = false
 )
 
 // ==========================================

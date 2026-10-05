@@ -808,6 +808,55 @@ private fun DrawScope.drawEnemyConceptArt(
             drawPath(path, Color(0xFFF57F17), style = Stroke(width = 3.5f))
             drawCircle(Color(0xFFFF007F), radius = 5.5f, center = Offset(ex, ey - r * 0.3f))
         }
+
+        EnemyType.INK_SWARMER -> {
+            val r = 50f
+            val wingFlap = sin(time * 12f) * 6f
+            val dartPath = Path().apply {
+                moveTo(ex, ey - r * 1.3f)
+                lineTo(ex + r * 1.2f + wingFlap, ey + r * 0.8f)
+                lineTo(ex + r * 0.3f, ey + r * 0.4f)
+                lineTo(ex, ey + r * 1.1f)
+                lineTo(ex - r * 0.3f, ey + r * 0.4f)
+                lineTo(ex - r * 1.2f - wingFlap, ey + r * 0.8f)
+                close()
+            }
+            drawPath(dartPath, Color(0xFFFFF9C4))
+            drawPath(dartPath, Color(0xFFF57F17), style = Stroke(width = 4f))
+            drawLine(Color(0xFFE65100), Offset(ex, ey - r * 1.2f), Offset(ex, ey + r * 0.9f), strokeWidth = 2.5f)
+            drawCircle(Color(0xFFFF1744), radius = 6f, center = Offset(ex, ey - r * 0.3f))
+        }
+
+        EnemyType.INK_WEAVER -> {
+            val r = 54f
+            val legColor = Color(0xFF37474F)
+            for (side in listOf(-1f, 1f)) {
+                for (i in 0..3) {
+                    val angleOffset = -0.5f + i * 0.35f
+                    val legBob = sin(time * 6f + i * 1.2f) * 4f
+                    val kneeX = ex + side * (r * 0.95f)
+                    val kneeY = ey + angleOffset * r * 1.2f - r * 0.2f + legBob
+                    val footX = ex + side * (r * 1.55f)
+                    val footY = ey + angleOffset * r * 1.6f + r * 0.4f + legBob
+                    drawLine(legColor, Offset(ex + side * r * 0.35f, ey + (i - 1.5f) * r * 0.2f), Offset(kneeX, kneeY), strokeWidth = 3f)
+                    drawLine(legColor, Offset(kneeX, kneeY), Offset(footX, footY), strokeWidth = 2.2f)
+                }
+            }
+
+            val abdomen = Path().apply {
+                moveTo(ex, ey - r * 0.9f)
+                lineTo(ex + r * 0.7f, ey - r * 0.1f)
+                lineTo(ex + r * 0.5f, ey + r * 0.85f)
+                lineTo(ex, ey + r * 1.05f)
+                lineTo(ex - r * 0.5f, ey + r * 0.85f)
+                lineTo(ex - r * 0.7f, ey - r * 0.1f)
+                close()
+            }
+            drawPath(abdomen, Color(0xFFECEFF1))
+            drawPath(abdomen, Color(0xFF263238), style = Stroke(width = 4f))
+            drawCircle(Color(0xFF8E24AA), radius = 6.5f, center = Offset(ex, ey - r * 0.2f))
+            drawCircle(Color(0xFF8E24AA), radius = 5f, center = Offset(ex, ey + r * 0.3f))
+        }
     }
 }
 

@@ -34,6 +34,24 @@ enum class EnemyType(
         xpValue = 2,
         damage = 22f
     ),
+    // Fast zigzag swarmers before minute 20
+    INK_SWARMER(
+        displayName = "Paper Swarmer",
+        baseHp = 22f,
+        speed = 145f,
+        radius = 13f,
+        xpValue = 1,
+        damage = 8f
+    ),
+    // Flanking spider weavers before minute 20
+    INK_WEAVER(
+        displayName = "Origami Weaver",
+        baseHp = 90f,
+        speed = 95f,
+        radius = 22f,
+        xpValue = 2,
+        damage = 16f
+    ),
     THE_TITAN(
         displayName = "The Titan",
         baseHp = 3500f,
@@ -109,6 +127,10 @@ data class Enemy(
     // Phase 5 Blotter sponge mechanics
     var isBlotter: Boolean = false,
     var absorbedPuddles: Int = 0,
+    // P2 Spell Traits status
+    var isMarkedForDetonation: Boolean = false,
+    var isSnared: Boolean = false,
+    var snareTimer: Float = 0f,
     // ─── Phase 7: Adaptive enemy flags ────────────────────────────────────────
     // ORIGAMI_SHIELD: true = immune to InkProjectile hits; dissolve in puddles
     var isImmuneToPiercing: Boolean = false,
@@ -141,6 +163,7 @@ data class Enemy(
     val effectiveSpeed: Float
         get() {
             if (frozenSolidTimer > 0f) return 0f // Frozen solid in black ice!
+            if (isSnared && snareTimer > 0f) return 0f // Snared by binding seal
             var spd = if (isElite) type.speed * 1.5f else type.speed
             if (slowTimer > 0f) {
                 spd *= (1f - slowRatio).coerceAtLeast(0.1f)

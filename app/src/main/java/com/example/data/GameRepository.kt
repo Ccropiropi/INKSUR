@@ -156,7 +156,7 @@ class GameRepository(
             totalKills = 15000,
             maxSurvivalSeconds = 3600,
             unlockedTools = "QUILL,WASH_BRUSH,STEEL_FOUNTAIN",
-            unlockedCharacters = "calligrapher,painter,scholar,master,celestial",
+            unlockedCharacters = "calligrapher,scholar,grandmaster,runesmith",
             metaAtkLevel = 10,
             metaSpeedLevel = 10,
             metaMagnetLevel = 10,

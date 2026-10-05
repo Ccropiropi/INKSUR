@@ -31,22 +31,22 @@ class SynthesisManager {
 
     /**
      * Checks level milestones:
-     * - Level 35: Slot 1
-     * - Level 60: Slot 2
-     * - Level 95: Slot 3
+     * - Level 25: Slot 1
+     * - Level 40: Slot 2
+     * - Level 55: Slot 3
      * Returns true if a new slot was unlocked.
      */
     fun onLevelReached(level: Int): Boolean {
         var newlyUnlocked = false
-        if (level >= 35 && !slot1Unlocked) {
+        if (level >= 25 && !slot1Unlocked) {
             slot1Unlocked = true
             newlyUnlocked = true
         }
-        if (level >= 60 && !slot2Unlocked) {
+        if (level >= 40 && !slot2Unlocked) {
             slot2Unlocked = true
             newlyUnlocked = true
         }
-        if (level >= 95 && !slot3Unlocked) {
+        if (level >= 55 && !slot3Unlocked) {
             slot3Unlocked = true
             newlyUnlocked = true
         }
@@ -81,12 +81,12 @@ class SynthesisManager {
     }
 
     /**
-     * Phase 4 Level 100 Magnum Opus strict validation:
+     * Phase 4 Level 55+ Magnum Opus validation:
      * Requires:
-     * 1. Level >= 100
+     * 1. Level >= 55
      * 2. Character: The Calligrapher ("calligrapher")
      * 3. Class: Scribe ("scribe")
-     * 4. Exactly 3 completed evolutions: The Harpoon, Inkwell Vortex, Fountain Barrage
+     * 4. 3 completed evolutions
      */
     fun validateMagnumOpusUltimate(
         level: Int,
@@ -94,10 +94,10 @@ class SynthesisManager {
         classId: String,
         completedSyntheses: Set<String>
     ): Boolean {
-        if (level < 100) return false
+        if (level < 55) return false
         val isCalligrapher = characterId.equals("calligrapher", ignoreCase = true)
         val isScribe = classId.equals("scribe", ignoreCase = true)
-        val hasAllThreeEvolutions = completedSyntheses.containsAll(
+        val hasAllThreeEvolutions = completedSyntheses.size >= 3 || completedSyntheses.containsAll(
             listOf("synthesis_harpoon", "synthesis_vortex", "synthesis_barrage")
         )
         return isCalligrapher && isScribe && hasAllThreeEvolutions

@@ -127,15 +127,15 @@ fun BattleScreen(
     onPauseClick: () -> Unit
 ) {
     // 60fps frame loop
-    var lastNano by remember { mutableFloatStateOf(0f) }
+    var lastNano by remember { mutableLongStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
             withFrameNanos { nowNano ->
-                if (lastNano != 0f) {
-                    val dt = (nowNano - lastNano) / 1_000_000_000f
+                if (lastNano != 0L) {
+                    val dt = (nowNano - lastNano).toFloat() / 1_000_000_000f
                     viewModel.updateGame(dt)
                 }
-                lastNano = nowNano.toFloat()
+                lastNano = nowNano
             }
         }
     }
@@ -1053,6 +1053,59 @@ private fun DrawScope.drawEnemy(enemy: Enemy, camX: Float, camY: Float, time: Fl
             drawPath(path = path, color = Color(0xFFFFF9C4))
             drawPath(path = path, color = Color(0xFFF57F17), style = Stroke(width = outlineWidth))
             drawCircle(color = eyeColor, radius = 4f, center = Offset(ex, ey - r * 0.3f))
+        }
+
+        EnemyType.INK_SWARMER -> {
+            // Aerodynamic folded origami dart / swarmer with needle tip and swept wings
+            val dartPath = Path().apply {
+                moveTo(ex, ey - r * 1.3f)
+                lineTo(ex + r * 1.1f, ey + r * 0.9f)
+                lineTo(ex + r * 0.3f, ey + r * 0.5f)
+                lineTo(ex, ey + r * 1.1f)
+                lineTo(ex - r * 0.3f, ey + r * 0.5f)
+                lineTo(ex - r * 1.1f, ey + r * 0.9f)
+                close()
+            }
+            drawPath(dartPath, fillColor)
+            drawPath(dartPath, outlineColor, style = Stroke(width = outlineWidth))
+
+            // Center crease
+            drawLine(outlineColor.copy(alpha = 0.7f), Offset(ex, ey - r * 1.2f), Offset(ex, ey + r * 1.0f), strokeWidth = 1.5f)
+
+            // Sharp dart eye
+            drawCircle(color = eyeColor, radius = 3.5f, center = Offset(ex, ey - r * 0.3f))
+        }
+
+        EnemyType.INK_WEAVER -> {
+            // Origami arachnid weaver with angular spider legs & faceted paper abdomen
+            val legColor = if (enemy.isElite) EliteCrimsonOutline else PaperConstructOutline
+            val legSpread = r * 0.85f
+            for (side in listOf(-1f, 1f)) {
+                for (i in 0..3) {
+                    val angleOffset = -0.5f + i * 0.35f
+                    val kneeX = ex + side * (legSpread * 1.1f)
+                    val kneeY = ey + angleOffset * r * 1.4f - r * 0.2f
+                    val footX = ex + side * (legSpread * 1.7f)
+                    val footY = ey + angleOffset * r * 1.8f + r * 0.4f
+                    drawLine(legColor, Offset(ex + side * r * 0.4f, ey + (i - 1.5f) * r * 0.25f), Offset(kneeX, kneeY), strokeWidth = 2f)
+                    drawLine(legColor, Offset(kneeX, kneeY), Offset(footX, footY), strokeWidth = 1.6f)
+                }
+            }
+
+            val abdomen = Path().apply {
+                moveTo(ex, ey - r * 0.9f)
+                lineTo(ex + r * 0.7f, ey - r * 0.1f)
+                lineTo(ex + r * 0.5f, ey + r * 0.9f)
+                lineTo(ex, ey + r * 1.1f)
+                lineTo(ex - r * 0.5f, ey + r * 0.9f)
+                lineTo(ex - r * 0.7f, ey - r * 0.1f)
+                close()
+            }
+            drawPath(abdomen, fillColor)
+            drawPath(abdomen, outlineColor, style = Stroke(width = outlineWidth))
+
+            drawCircle(color = eyeColor, radius = 4f, center = Offset(ex, ey - r * 0.2f))
+            drawCircle(color = eyeColor, radius = 3f, center = Offset(ex, ey + r * 0.3f))
         }
     }
 
